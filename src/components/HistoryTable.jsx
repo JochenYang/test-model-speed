@@ -81,33 +81,36 @@ export default function HistoryTable({
             <TableRow>
               <TableHead>{t('history.columns.time', language)}</TableHead>
               <TableHead>{t('history.columns.provider', language)}</TableHead>
-              <TableHead>{t('history.columns.model', language)}</TableHead>
-              <TableHead className="text-right">{t('history.columns.ttft', language)}</TableHead>
-              <TableHead className="text-right">{t('history.columns.latency', language)}</TableHead>
-              <TableHead className="text-right">TPS</TableHead>
-              <TableHead className="text-right">{t('history.columns.tokens', language)}</TableHead>
+              <TableHead className="min-w-[120px]">{t('history.columns.model', language)}</TableHead>
+              <TableHead className="text-right whitespace-nowrap">{t('history.columns.ttft', language)}</TableHead>
+              <TableHead className="text-right whitespace-nowrap">{t('history.columns.latency', language)}</TableHead>
+              <TableHead className="text-right whitespace-nowrap">{t('history.columns.steadyTps', language)}</TableHead>
+              <TableHead className="text-right whitespace-nowrap">{t('history.columns.effectiveTps', language)}</TableHead>
+              <TableHead className="text-right whitespace-nowrap">{t('history.columns.tokens', language)}</TableHead>
               <TableHead className="text-center">{t('history.columns.action', language)}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {history.map((item) => (
               <TableRow key={item.id}>
-                <TableCell className="text-slate-600">
+                <TableCell className="text-slate-600 whitespace-nowrap">
                   {new Date(item.timestamp).toLocaleString()}
                 </TableCell>
-                <TableCell className="font-medium">{item.provider}</TableCell>
+                <TableCell className="font-medium whitespace-nowrap">{item.provider}</TableCell>
                 <TableCell className="font-mono text-slate-600">{item.model}</TableCell>
-                <TableCell className="text-right">
+                <TableCell className="text-right whitespace-nowrap">
                   {(item.ttft || item.latency)} ms
                 </TableCell>
-                <TableCell className="text-right">{item.latency} ms</TableCell>
-                <TableCell className="text-right">{item.effectiveTps || 0}</TableCell>
-                <TableCell className="text-right">{item.outputTokens}</TableCell>
+                <TableCell className="text-right whitespace-nowrap">{item.latency} ms</TableCell>
+                <TableCell className="text-right whitespace-nowrap">{item.throughput || 0}</TableCell>
+                <TableCell className="text-right whitespace-nowrap">{item.effectiveTps || 0}</TableCell>
+                <TableCell className="text-right whitespace-nowrap">{item.outputTokens}</TableCell>
                 <TableCell className="text-center">
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => onDelete(item.id)}
+                    className="text-red-500 hover:text-red-700 hover:bg-red-50"
                     title={language === 'zh' ? '删除' : 'Delete'}
                   >
                     <Trash2 size={16} />

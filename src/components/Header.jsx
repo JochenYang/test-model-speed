@@ -1,4 +1,4 @@
-import { Gauge, Zap } from 'lucide-react'
+import { Gauge, Github } from 'lucide-react'
 import { languages } from '../config/i18n'
 import {
   Select,
@@ -11,7 +11,7 @@ import {
 export default function Header({ language, onLanguageChange }) {
   return (
     <header className="bg-white border-b border-slate-200 shadow-sm">
-      <div className="max-w-4xl mx-auto px-4 py-4">
+      <div className="max-w-6xl mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             {/* Logo Icon */}
@@ -32,19 +32,32 @@ export default function Header({ language, onLanguageChange }) {
             </div>
           </div>
 
-          {/* Language Switcher */}
-          <Select value={language} onValueChange={onLanguageChange}>
-            <SelectTrigger className="w-[130px] h-9 bg-slate-50 border-slate-200 hover:bg-slate-100 transition-colors">
-              <SelectValue placeholder="Language" />
-            </SelectTrigger>
-            <SelectContent>
-              {languages.map((lang) => (
-                <SelectItem key={lang.code} value={lang.code}>
-                  {lang.nativeName}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            {/* GitHub Link */}
+            <a
+              href="https://github.com/JochenYang/test-model-speed"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
+              title="GitHub"
+            >
+              <Github className="w-5 h-5 text-slate-600" />
+            </a>
+
+            {/* Language Switcher */}
+            <Select value={language} onValueChange={onLanguageChange}>
+              <SelectTrigger className="w-[130px] h-9 bg-slate-50 border-slate-200 hover:bg-slate-100 transition-colors">
+                <SelectValue placeholder="Language" />
+              </SelectTrigger>
+              <SelectContent>
+                {languages.map((lang) => (
+                  <SelectItem key={lang.code} value={lang.code}>
+                    {lang.nativeName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
     </header>

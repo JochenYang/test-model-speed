@@ -193,9 +193,13 @@ export const translations = {
         zh: '耗时',
         en: 'Latency',
       },
-      tps: {
-        zh: 'TPS',
-        en: 'TPS',
+      steadyTps: {
+        zh: '稳定吞吐',
+        en: 'Steady TPS',
+      },
+      effectiveTps: {
+        zh: '有效吞吐',
+        en: 'Effective TPS',
       },
       tokens: {
         zh: 'Token',

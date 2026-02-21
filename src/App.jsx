@@ -120,7 +120,6 @@ function AppContent() {
     deleteRecord(id)
     setHistory(getHistory())
     triggerToast('success',
-      language === 'zh' ? '已删除' : 'Deleted',
       language === 'zh' ? '记录已删除' : 'Record deleted'
     )
   }
@@ -140,7 +139,6 @@ function AppContent() {
       clearHistory()
       setHistory([])
       triggerToast('success',
-        language === 'zh' ? '已清空' : 'Cleared',
         language === 'zh' ? '历史记录已清空' : 'History cleared'
       )
     }
@@ -174,7 +172,7 @@ function AppContent() {
     <div className="min-h-screen bg-slate-50">
       <Header language={language} onLanguageChange={handleLanguageChange} />
 
-      <main className="max-w-4xl mx-auto px-4 py-8 pb-8">
+      <main className="max-w-6xl mx-auto px-4 py-8 pb-8">
         <TestForm
           providers={providers}
           selectedProvider={selectedProvider}
