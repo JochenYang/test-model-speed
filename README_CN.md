@@ -1,8 +1,16 @@
-# 模型速度测试工具
 
-LLM API 速度测试工具 - 支持国内主流模型提供商
+<div align="center">
+
+**LLM API 速度测试工具**
+支持国内主流模型提供商
 
 ![演示图](public/image/test.png)
+
+[English](README.md) | [中文](README_CN.md)
+
+</div>
+
+---
 
 ## 功能特性
 
@@ -72,4 +80,4 @@ npm run build
 
 ## 许可证
 
-MIT
+MIT 许可证 - 详见 [LICENSE](LICENSE) 文件。

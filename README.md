@@ -1,8 +1,16 @@
-# Model Speed Tester
 
-LLM API Speed Testing Tool - Supports Major Domestic Model Providers
+<div align="center">
+
+**LLM API Speed Testing Tool**
+Supports Major Domestic Model Providers
 
 ![Demo](public/image/test.png)
+
+[English](README.md) | [中文](README_CN.md)
+
+</div>
+
+---
 
 ## Features
 
@@ -72,4 +80,4 @@ Build output is in the `dist` directory.
 
 ## License
 
-MIT
+MIT License - see [LICENSE](LICENSE) file for details.

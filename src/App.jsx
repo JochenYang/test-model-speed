@@ -174,7 +174,7 @@ function AppContent() {
     <div className="min-h-screen bg-slate-50">
       <Header language={language} onLanguageChange={handleLanguageChange} />
 
-      <main className="max-w-4xl mx-auto px-4 pb-8">
+      <main className="max-w-4xl mx-auto px-4 py-8 pb-8">
         <TestForm
           providers={providers}
           selectedProvider={selectedProvider}
