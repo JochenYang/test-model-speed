@@ -37,8 +37,19 @@ export const providers = [
   },
   {
     id: 'minimax',
-    name: 'minimax',
-    baseUrl: 'https://api.minimax.chat/v1',
+    name: 'minimax(国内版)',
+    baseUrl: 'https://api.minimaxi.com/v1',
+    models: [
+      { id: 'Minimax-M2', name: 'Minimax-M2' },
+      { id: 'Minimax-M2.1', name: 'Minimax-M2.1' },
+      { id: 'Minimax-m2.5', name: 'Minimax-m2.5' },
+      { id: 'Minimax-M2.5-highspeed', name: 'Minimax-M2.5-highspeed' },
+    ],
+  },
+  {
+    id: 'minimax_intl',
+    name: 'minimax(国际版)',
+    baseUrl: 'https://api.minimax.io/v1',
     models: [
       { id: 'Minimax-M2', name: 'Minimax-M2' },
       { id: 'Minimax-M2.1', name: 'Minimax-M2.1' },
