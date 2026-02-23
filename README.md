@@ -1,4 +1,3 @@
-
 <div align="center">
 
 **LLM API Speed Testing Tool**
@@ -15,7 +14,7 @@ Supports Major Domestic Model Providers
 ## Features
 
 - **Multi-language Support**: Chinese and English UI, switchable anytime
-- **Multi-provider Support**: DashScope (Alibaba), Volcengine, Zhipu AI, Minimax, Kimi
+- **Multi-provider Support**: DashScope (Alibaba), Volcengine, Zhipu AI, Minimax (Domestic/Intl), Kimi
 - **Per-provider API Key Storage**: Each provider's API key is saved separately
 - **Accurate Metrics**: TTFT (Time To First Token), Steady TPS, Effective TPS
 - **History**: LocalStorage persistence, supports search/filter
@@ -24,23 +23,24 @@ Supports Major Domestic Model Providers
 
 ## Metrics Explained
 
-| Metric | Description |
-|--------|-------------|
-| TTFT | Time To First Token - latency from request to first token |
-| Total Time | Complete response time from request to final token |
-| Steady TPS | Pure generation speed excluding first token (tokens/s) |
-| Effective TPS | User-perceived speed including first token (tokens/s) |
+| Metric        | Description                                               |
+| ------------- | --------------------------------------------------------- |
+| TTFT          | Time To First Token - latency from request to first token |
+| Total Time    | Complete response time from request to final token        |
+| Steady TPS    | Pure generation speed excluding first token (tokens/s)    |
+| Effective TPS | User-perceived speed including first token (tokens/s)     |
 
 ## Supported Providers & Models
 
-| Provider | Models |
-|----------|--------|
-| DashScope (Alibaba) | qwen3.5-plus, qwen3-max |
-| Volcengine | doubao-seed-2-0-pro, doubao-seed-2-0-lite, doubao-seed-2-0-code |
-| Zhipu AI | glm-4.5, glm-4.6, glm-4.7, glm-5 |
-| Minimax | Minimax-M2, M2.1, M2.5, M2.5-highspeed |
-| Kimi | kimi-for-coding |
-| Custom | Any OpenAI-compatible API |
+| Provider            | Models                                                          |
+| ------------------- | --------------------------------------------------------------- |
+| DashScope (Alibaba) | qwen3.5-plus, qwen3-max                                         |
+| Volcengine          | doubao-seed-2-0-pro, doubao-seed-2-0-lite, doubao-seed-2-0-code |
+| Zhipu AI            | glm-4.5, glm-4.6, glm-4.7, glm-5                                |
+| Minimax (Domestic)  | Minimax-M2, M2.1, M2.5, M2.5-highspeed                          |
+| Minimax (Intl)      | Minimax-M2, M2.1, M2.5, M2.5-highspeed                          |
+| Kimi                | kimi-for-coding                                                 |
+| Custom              | Any OpenAI-compatible API                                       |
 
 ## Quick Start
 
@@ -77,6 +77,14 @@ Build output is in the `dist` directory.
 - shadcn/ui (Radix UI)
 - Sonner (Toast notifications)
 - Lucide React
+
+## Implementation Principles
+
+1. **TTFT Measurement**: Uses streaming response (SSE), recording the time from request start to the first valid content chunk.
+2. **Metric Calculation**: Uses a single streaming request with `stream_options: { include_usage: true }`.
+   - If the API supports `usage` information (e.g., Alibaba, Volcengine, Minimax), official token counts are used.
+   - If not supported, an intelligent estimation based on character count is applied.
+3. **API Compatibility**: Based on the standard OpenAI `/v1/chat/completions` specification to ensure broad compatibility.
 
 ## License
 
