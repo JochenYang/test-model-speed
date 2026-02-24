@@ -4,12 +4,9 @@
  * Uses proxy to avoid CORS issues
  */
 
-// In development, use the Vercel deployed proxy
-// In production, use the relative /api/proxy path
-const isDev = import.meta.env.DEV
-const PROXY_URL = isDev
-  ? 'https://test-model-speed.vercel.app/api/proxy'
-  : '/api/proxy'
+// Production: use Vercel serverless proxy
+// Development: direct call (requires CORS plugin in browser)
+const PROXY_URL = import.meta.env.PROD ? '/api/proxy' : null
 
 /**
  * Call LLM API with streaming and measure performance
@@ -25,19 +22,35 @@ export async function callLLMApi(baseUrl, apiKey, model, prompt) {
   let firstTokenTime = null
   let finalTokens = 0
 
-  const streamResponse = await fetch(PROXY_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      baseUrl,
-      apiKey,
-      model,
-      messages: [{ role: 'user', content: prompt }],
-      stream: true,
-    }),
-  })
+  const endpoint = PROXY_URL || baseUrl
+
+  const requestOptions = PROXY_URL
+    ? {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          baseUrl,
+          apiKey,
+          model,
+          messages: [{ role: 'user', content: prompt }],
+          stream: true,
+        }),
+      }
+    : {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'user', content: prompt }],
+          stream: true,
+          max_tokens: 512,
+        }),
+      }
+
+  const streamResponse = await fetch(endpoint, requestOptions)
 
   if (!streamResponse.ok) {
     const error = await streamResponse.json().catch(() => ({}))
