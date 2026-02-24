@@ -1,12 +1,9 @@
 /**
  * LLM API service for speed testing
  * Uses streaming to accurately measure TTFT, throughput, and effective TPS
- * Uses proxy to avoid CORS issues
  */
 
-// Production: use Vercel serverless proxy
-// Development: direct call (requires CORS plugin in browser)
-const PROXY_URL = import.meta.env.PROD ? '/api/proxy' : null
+const isDev = import.meta.env.DEV
 
 /**
  * Call LLM API with streaming and measure performance
@@ -22,35 +19,39 @@ export async function callLLMApi(baseUrl, apiKey, model, prompt) {
   let firstTokenTime = null
   let finalTokens = 0
 
-  const endpoint = PROXY_URL || baseUrl
+  // Development: direct call
+  // Production: use Vercel proxy
+  const url = isDev ? `${baseUrl}/chat/completions` : '/api/proxy'
 
-  const requestOptions = PROXY_URL
+  const body = isDev
     ? {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          baseUrl,
-          apiKey,
-          model,
-          messages: [{ role: 'user', content: prompt }],
-          stream: true,
-        }),
+        model,
+        messages: [{ role: 'user', content: prompt }],
+        stream: true,
+        max_tokens: 512,
       }
     : {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          messages: [{ role: 'user', content: prompt }],
-          stream: true,
-          max_tokens: 512,
-        }),
+        baseUrl,
+        apiKey,
+        model,
+        messages: [{ role: 'user', content: prompt }],
+        stream: true,
       }
 
-  const streamResponse = await fetch(endpoint, requestOptions)
+  const headers = isDev
+    ? {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      }
+    : {
+        'Content-Type': 'application/json',
+      }
+
+  const streamResponse = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  })
 
   if (!streamResponse.ok) {
     const error = await streamResponse.json().catch(() => ({}))
