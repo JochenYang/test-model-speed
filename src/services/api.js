@@ -1,14 +1,18 @@
 /**
  * LLM API service for speed testing
  * Uses streaming to accurately measure TTFT, throughput, and effective TPS
- * Uses Vercel proxy to avoid CORS issues
+ * Uses Vercel proxy in production to avoid CORS issues
  */
 
 const PROXY_URL = '/api/proxy'
 
+// Detect if we're in production (Vercel) or development
+const isProduction = typeof window !== 'undefined' &&
+  window.location.hostname !== 'localhost' &&
+  window.location.hostname !== '127.0.0.1'
+
 /**
  * Call LLM API with streaming and measure performance
- * Uses two requests: one for accurate token count, one for TTFT measurement
  * @param {string} baseUrl - Provider base URL
  * @param {string} apiKey - API key
  * @param {string} model - Model name
@@ -21,21 +25,36 @@ export async function callLLMApi(baseUrl, apiKey, model, prompt) {
   let firstTokenTime = null
   let finalTokens = 0
 
-  const streamResponse = await fetch(PROXY_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      baseUrl,
-      apiKey,
-      model,
-      messages: [
-        { role: 'user', content: prompt }
-      ],
-      stream: true,
-    }),
-  })
+  // Use proxy in production, direct call in development
+  const endpoint = isProduction ? PROXY_URL : baseUrl
+
+  const requestOptions = isProduction
+    ? {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          baseUrl,
+          apiKey,
+          model,
+          messages: [{ role: 'user', content: prompt }],
+          stream: true,
+        }),
+      }
+    : {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'user', content: prompt }],
+          stream: true,
+          max_tokens: 512,
+        }),
+      }
+
+  const streamResponse = await fetch(endpoint, requestOptions)
 
   if (!streamResponse.ok) {
     const error = await streamResponse.json().catch(() => ({}))
