@@ -3,7 +3,7 @@
  * Uses streaming to accurately measure TTFT, throughput, and effective TPS
  */
 
-const isDev = import.meta.env.DEV
+const isProd = import.meta.env.PROD
 
 /**
  * Call LLM API with streaming and measure performance
@@ -14,48 +14,45 @@ const isDev = import.meta.env.DEV
  * @returns {Promise<{ttft: number, latency: number, throughput: number, effectiveTps: number, outputTokens: number}>}
  */
 export async function callLLMApi(baseUrl, apiKey, model, prompt) {
+  // Production: use Vercel proxy to avoid CORS
+  // Development: direct call
+  const url = isProd ? '/api/proxy' : `${baseUrl}/chat/completions`
+
+  // Build request body
+  const requestBase = {
+    model: model,
+    messages: [{ role: 'user', content: prompt }],
+    stream: true,
+    max_tokens: 512,
+    stream_options: { include_usage: true }
+  }
+
+  const requestBody = isProd 
+    ? { ...requestBase, baseUrl, apiKey }
+    : requestBase
+
+  // Build headers
+  const headers = isProd
+    ? { 'Content-Type': 'application/json' }
+    : {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      }
+
   const startTime = performance.now()
   let ttft = null
   let firstTokenTime = null
   let finalTokens = 0
 
-  // Development: direct call
-  // Production: use Vercel proxy
-  const url = isDev ? `${baseUrl}/chat/completions` : '/api/proxy'
-
-  const body = isDev
-    ? {
-        model,
-        messages: [{ role: 'user', content: prompt }],
-        stream: true,
-        max_tokens: 512,
-      }
-    : {
-        baseUrl,
-        apiKey,
-        model,
-        messages: [{ role: 'user', content: prompt }],
-        stream: true,
-      }
-
-  const headers = isDev
-    ? {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      }
-    : {
-        'Content-Type': 'application/json',
-      }
-
   const streamResponse = await fetch(url, {
     method: 'POST',
     headers,
-    body: JSON.stringify(body),
+    body: JSON.stringify(requestBody),
   })
 
   if (!streamResponse.ok) {
     const error = await streamResponse.json().catch(() => ({}))
-    throw new Error(error.error || `HTTP ${streamResponse.status}: ${streamResponse.statusText}`)
+    throw new Error(error.error || error.message || `HTTP ${streamResponse.status}: ${streamResponse.statusText}`)
   }
 
   const reader = streamResponse.body.getReader()
@@ -121,16 +118,28 @@ export async function callLLMApi(baseUrl, apiKey, model, prompt) {
   const endTime = performance.now()
   const totalLatency = endTime - startTime
 
-  // Approximate token count if not provided
+  // Improved token estimation if usage is not provided
   if (finalTokens === 0) {
-    finalTokens = Math.max(1, Math.ceil(generatedText.length * 1.2))
+    // English words ~1.3 characters each on average in tokens, Chinese ~0.6 chars/token?
+    // Actually OpenAI: 1000 tokens ~= 750 words (English). 1 token ~= 1.5 characters for English.
+    // For Chinese: 1 token ~= 0.7 characters? (approx 1.5 tokens per char).
+    const text = generatedText
+    const chineseChars = (text.match(/[\u4e00-\u9fa5]/g) || []).length
+    const otherChars = text.length - chineseChars
+    // Estimation: Chinese chars * 1.6 + English/other chars * 0.4 (roughly 1 token per 2.5 chars)
+    finalTokens = Math.max(1, Math.ceil(chineseChars * 1.6 + otherChars * 0.4))
   }
 
   // Calculate steady throughput
+  // If streaming time is too short (e.g. < 50ms), it's likely buffered or too fast to measure accurately
   const streamingTime = firstTokenTime ? (endTime - firstTokenTime) : 0
-  const throughput = streamingTime > 0 && finalTokens > 1
-    ? ((finalTokens - 1) / (streamingTime / 1000))
-    : 0
+  let throughput = 0
+  if (streamingTime > 50 && finalTokens > 1) {
+    throughput = (finalTokens - 1) / (streamingTime / 1000)
+  } else if (finalTokens > 0 && totalLatency > 0) {
+    // Fallback to effective TPS if streaming time is too small
+    throughput = finalTokens / (totalLatency / 1000)
+  }
 
   // Calculate effective TPS
   const effectiveTps = finalTokens > 0 && totalLatency > 0

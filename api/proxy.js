@@ -28,6 +28,8 @@ export async function POST(request) {
         model,
         messages,
         stream: stream || false,
+        max_tokens: body.max_tokens,
+        stream_options: body.stream_options,
       }),
     })
 
