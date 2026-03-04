@@ -239,7 +239,7 @@ export default function TestForm({
 
       {/* Test Button */}
       <Button
-        onClick={() => onTest(customUrlInput, customModelInput)}
+        onClick={() => onTest(customUrlInput, customModelInput, useCustomModel)}
         disabled={
           isTesting ||
           !apiKey.trim() ||

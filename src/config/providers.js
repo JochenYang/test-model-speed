@@ -42,6 +42,7 @@ export const providers = [
     models: [
       { id: 'Minimax-M2', name: 'Minimax-M2' },
       { id: 'Minimax-M2.1', name: 'Minimax-M2.1' },
+      { id: 'Minimax-M2.1-highspeed', name: 'Minimax-M2.1-highspeed' },
       { id: 'Minimax-m2.5', name: 'Minimax-m2.5' },
       { id: 'Minimax-M2.5-highspeed', name: 'Minimax-M2.5-highspeed' },
     ],
@@ -53,6 +54,7 @@ export const providers = [
     models: [
       { id: 'Minimax-M2', name: 'Minimax-M2' },
       { id: 'Minimax-M2.1', name: 'Minimax-M2.1' },
+      { id: 'Minimax-M2.1-highspeed', name: 'Minimax-M2.1-highspeed' },
       { id: 'Minimax-m2.5', name: 'Minimax-m2.5' },
       { id: 'Minimax-M2.5-highspeed', name: 'Minimax-M2.5-highspeed' },
     ],

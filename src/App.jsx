@@ -46,7 +46,7 @@ function AppContent() {
   }
 
   // Handle test execution
-  const handleTest = async (customUrl, customModel) => {
+  const handleTest = async (customUrl, customModel, useCustomModel) => {
     if (!apiKey.trim()) {
       setErrorMessage(language === 'zh' ? '请输入 API Key' : 'Please enter API Key')
       setTestStatus('error')
@@ -79,7 +79,9 @@ function AppContent() {
 
     // Use custom URL and model if custom provider selected
     const baseUrl = isCustomProvider ? customUrl.trim() : selectedProvider.baseUrl
-    const modelId = isCustomProvider ? customModel.trim() : selectedModel.id
+    const modelId = (isCustomProvider || useCustomModel)
+      ? (customModel?.trim() || selectedModel.id)
+      : selectedModel.id
 
     try {
       const result = await callLLMApi(baseUrl, apiKey, modelId, prompt)
