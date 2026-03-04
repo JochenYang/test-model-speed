@@ -118,26 +118,24 @@ export async function callLLMApi(baseUrl, apiKey, model, prompt) {
   const endTime = performance.now()
   const totalLatency = endTime - startTime
 
-  // Improved token estimation if usage is not provided
+  // Improved token estimation - corrected formula
+  // Chinese: ~0.5-0.7 tokens per character, English: ~0.25 tokens per character (1 token ≈ 4 chars)
   if (finalTokens === 0) {
-    // English words ~1.3 characters each on average in tokens, Chinese ~0.6 chars/token?
-    // Actually OpenAI: 1000 tokens ~= 750 words (English). 1 token ~= 1.5 characters for English.
-    // For Chinese: 1 token ~= 0.7 characters? (approx 1.5 tokens per char).
     const text = generatedText
     const chineseChars = (text.match(/[\u4e00-\u9fa5]/g) || []).length
     const otherChars = text.length - chineseChars
-    // Estimation: Chinese chars * 1.6 + English/other chars * 0.4 (roughly 1 token per 2.5 chars)
-    finalTokens = Math.max(1, Math.ceil(chineseChars * 1.6 + otherChars * 0.4))
+    // Correction: divide by character count per token, not multiply
+    finalTokens = Math.max(1, Math.ceil(chineseChars / 1.5 + otherChars / 4))
   }
 
-  // Calculate steady throughput
-  // If streaming time is too short (e.g. < 50ms), it's likely buffered or too fast to measure accurately
+  // Calculate steady throughput - time from first token to last token
   const streamingTime = firstTokenTime ? (endTime - firstTokenTime) : 0
   let throughput = 0
-  if (streamingTime > 50 && finalTokens > 1) {
-    throughput = (finalTokens - 1) / (streamingTime / 1000)
+  // Use 100ms as minimum threshold for more accurate measurement
+  if (streamingTime > 100 && finalTokens > 0) {
+    throughput = finalTokens / (streamingTime / 1000)
   } else if (finalTokens > 0 && totalLatency > 0) {
-    // Fallback to effective TPS if streaming time is too small
+    // Fallback to total latency if streaming time is too small
     throughput = finalTokens / (totalLatency / 1000)
   }
 
