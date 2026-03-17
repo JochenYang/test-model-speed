@@ -6,14 +6,45 @@
 const isProd = import.meta.env.PROD
 
 /**
+ * Estimate tokens using improved algorithm for mixed Chinese/English content
+ * @param {string} text - Generated text
+ * @returns {number} Estimated token count
+ */
+function estimateTokens(text) {
+  if (!text || text.length === 0) return 1
+
+  // Count Chinese characters (each Chinese character ~= 0.55 tokens)
+  const chineseChars = (text.match(/[\u4e00-\u9fa5]+/g) || []).join('').length
+
+  // Remove Chinese characters and count English words
+  const textWithoutChinese = text.replace(/[\u4e00-\u9fa5]/g, '')
+  const englishWords = textWithoutChinese.split(/\s+/).filter(w => w.length > 0)
+
+  // Count punctuation (each punctuation mark ~= 0.3 tokens)
+  const punctuationCount = (text.match(/[\p{P}]/u) || []).length
+
+  // Calculation: Chinese * 0.55 + English words * 1.3 + Punctuation * 0.3
+  return Math.max(1, Math.ceil(
+    chineseChars * 0.55 +
+    englishWords.length * 1.3 +
+    punctuationCount * 0.3
+  ))
+}
+
+/**
  * Call LLM API with streaming and measure performance
  * @param {string} baseUrl - Provider base URL
  * @param {string} apiKey - API key
  * @param {string} model - Model name
  * @param {string} prompt - User prompt
+ * @param {Object} options - Options object
+ * @param {number} options.maxTokens - Maximum tokens to generate (default: 2048)
+ * @param {number} options.timeout - Request timeout in milliseconds (default: 120000)
  * @returns {Promise<{ttft: number, latency: number, throughput: number, effectiveTps: number, outputTokens: number}>}
  */
-export async function callLLMApi(baseUrl, apiKey, model, prompt) {
+export async function callLLMApi(baseUrl, apiKey, model, prompt, options = {}) {
+  const { maxTokens = 2048, timeout = 120000 } = options
+
   // Production: use Vercel proxy to avoid CORS
   // Development: direct call
   const url = isProd ? '/api/proxy' : `${baseUrl}/chat/completions`
@@ -23,11 +54,11 @@ export async function callLLMApi(baseUrl, apiKey, model, prompt) {
     model: model,
     messages: [{ role: 'user', content: prompt }],
     stream: true,
-    max_tokens: 512,
+    max_tokens: maxTokens,
     stream_options: { include_usage: true }
   }
 
-  const requestBody = isProd 
+  const requestBody = isProd
     ? { ...requestBase, baseUrl, apiKey }
     : requestBase
 
@@ -44,11 +75,27 @@ export async function callLLMApi(baseUrl, apiKey, model, prompt) {
   let firstTokenTime = null
   let finalTokens = 0
 
-  const streamResponse = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(requestBody),
-  })
+  // Set up AbortController for timeout
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeout)
+
+  let streamResponse
+  try {
+    streamResponse = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(requestBody),
+      signal: controller.signal,
+    })
+  } catch (error) {
+    clearTimeout(timeoutId)
+    if (error.name === 'AbortError') {
+      throw new Error(`Request timeout after ${timeout / 1000}s`)
+    }
+    throw error
+  }
+
+  clearTimeout(timeoutId)
 
   if (!streamResponse.ok) {
     const error = await streamResponse.json().catch(() => ({}))
@@ -85,6 +132,7 @@ export async function callLLMApi(baseUrl, apiKey, model, prompt) {
           const data = JSON.parse(jsonStr)
 
           // Try to get token usage from the stream
+          // Some providers (e.g., MiniMax) send usage in a separate chunk with empty choices
           if (data.usage && data.usage.completion_tokens) {
             finalTokens = data.usage.completion_tokens
           }
@@ -120,14 +168,7 @@ export async function callLLMApi(baseUrl, apiKey, model, prompt) {
 
   // Improved token estimation if usage is not provided
   if (finalTokens === 0) {
-    // English words ~1.3 characters each on average in tokens, Chinese ~0.6 chars/token?
-    // Actually OpenAI: 1000 tokens ~= 750 words (English). 1 token ~= 1.5 characters for English.
-    // For Chinese: 1 token ~= 0.7 characters? (approx 1.5 tokens per char).
-    const text = generatedText
-    const chineseChars = (text.match(/[\u4e00-\u9fa5]/g) || []).length
-    const otherChars = text.length - chineseChars
-    // Estimation: Chinese chars * 1.6 + English/other chars * 0.4 (roughly 1 token per 2.5 chars)
-    finalTokens = Math.max(1, Math.ceil(chineseChars * 1.6 + otherChars * 0.4))
+    finalTokens = estimateTokens(generatedText)
   }
 
   // Calculate steady throughput

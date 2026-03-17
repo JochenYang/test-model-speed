@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Eye, EyeOff, Play, Loader2 } from 'lucide-react'
+import { Eye, EyeOff, Play, Loader2, Settings } from 'lucide-react'
 import { t, getProviderName } from '../config/i18n'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
@@ -13,7 +13,7 @@ import {
 } from './ui/select'
 import { Checkbox } from './ui/checkbox'
 import { Label } from './ui/label'
-import { getApiKey as getStoredApiKey, saveApiKey as storeApiKey, getSaveApiKeyPreference, setSaveApiKeyPreference } from '../services/storage'
+import { getApiKey as getStoredApiKey, saveApiKey as storeApiKey, getSaveApiKeyPreference, setSaveApiKeyPreference, getTestConfig, saveTestConfig } from '../services/storage'
 
 export default function TestForm({
   providers,
@@ -28,12 +28,19 @@ export default function TestForm({
   onTest,
   testStatus,
   language,
+  testConfig,
+  onTestConfigChange,
 }) {
   const [showApiKey, setShowApiKey] = useState(false)
   const [customModelInput, setCustomModelInput] = useState('')
   const [customUrlInput, setCustomUrlInput] = useState('')
   const [useCustomModel, setUseCustomModel] = useState(false)
   const [saveApiKeyEnabled, setSaveApiKeyEnabled] = useState(true)
+  const [localTestConfig, setLocalTestConfig] = useState(testConfig || {
+    maxTokens: 2048,
+    runCount: 3,
+    timeout: 120,
+  })
 
   const isTesting = testStatus === 'testing'
   const isCustomProvider = selectedProvider.id === 'custom'
@@ -41,6 +48,9 @@ export default function TestForm({
   // Load saved preferences
   useEffect(() => {
     setSaveApiKeyEnabled(getSaveApiKeyPreference())
+    const savedConfig = getTestConfig()
+    setLocalTestConfig(savedConfig)
+    onTestConfigChange(savedConfig)
   }, [])
 
   // Load API key when provider changes
@@ -217,6 +227,70 @@ export default function TestForm({
           <Label htmlFor="saveApiKey" className="text-sm font-normal cursor-pointer">
             {language === 'zh' ? '保存 API Key 到本地' : 'Save API Key to local'}
           </Label>
+        </div>
+      </div>
+
+      {/* Advanced Config */}
+      <div className="mb-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+        <div className="flex items-center gap-2 mb-3">
+          <Settings size={18} className="text-slate-500" />
+          <Label className="text-sm font-medium">{t('form.advancedConfig', language)}</Label>
+        </div>
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <Label className="mb-1 block text-xs text-slate-500">{t('form.maxTokens', language)}</Label>
+            <Input
+              type="number"
+              min={256}
+              max={8192}
+              step={256}
+              value={localTestConfig.maxTokens}
+              onChange={(e) => {
+                const value = Math.max(256, Math.min(8192, parseInt(e.target.value) || 2048))
+                const newConfig = { ...localTestConfig, maxTokens: value }
+                setLocalTestConfig(newConfig)
+                onTestConfigChange(newConfig)
+                saveTestConfig(newConfig)
+              }}
+              disabled={isTesting}
+            />
+          </div>
+          <div>
+            <Label className="mb-1 block text-xs text-slate-500">{t('form.runCount', language)}</Label>
+            <Input
+              type="number"
+              min={1}
+              max={10}
+              value={localTestConfig.runCount}
+              onChange={(e) => {
+                const value = Math.max(1, Math.min(10, parseInt(e.target.value) || 3))
+                const newConfig = { ...localTestConfig, runCount: value }
+                setLocalTestConfig(newConfig)
+                onTestConfigChange(newConfig)
+                saveTestConfig(newConfig)
+              }}
+              disabled={isTesting}
+            />
+          </div>
+          <div>
+            <Label className="mb-1 block text-xs text-slate-500">
+              {t('form.timeout', language)} ({t('form.seconds', language)})
+            </Label>
+            <Input
+              type="number"
+              min={30}
+              max={300}
+              value={localTestConfig.timeout}
+              onChange={(e) => {
+                const value = Math.max(30, Math.min(300, parseInt(e.target.value) || 120))
+                const newConfig = { ...localTestConfig, timeout: value }
+                setLocalTestConfig(newConfig)
+                onTestConfigChange(newConfig)
+                saveTestConfig(newConfig)
+              }}
+              disabled={isTesting}
+            />
+          </div>
         </div>
       </div>
 

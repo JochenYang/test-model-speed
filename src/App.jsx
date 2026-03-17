@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { providers, defaultPrompt } from './config/providers'
 import { callLLMApi } from './services/api'
-import { getHistory, saveResult, deleteRecord, clearHistory, exportCSV, exportJSON, getLanguage, saveLanguage } from './services/storage'
+import { getHistory, saveResult, deleteRecord, clearHistory, exportCSV, exportJSON, getLanguage, saveLanguage, getTestConfig } from './services/storage'
 import Header from './components/Header'
 import Footer from './components/Footer'
 import TestForm from './components/TestForm'
@@ -21,6 +21,9 @@ function AppContent() {
   const [history, setHistory] = useState([])
   const [searchQuery, setSearchQuery] = useState('')
   const [language, setLanguage] = useState('zh')
+  const [testConfig, setTestConfig] = useState(getTestConfig())
+  const [intermediateResults, setIntermediateResults] = useState([])
+  const [currentRun, setCurrentRun] = useState(0)
 
   const { showConfirm } = useToast()
 
@@ -31,6 +34,9 @@ function AppContent() {
     // Load saved language
     const savedLanguage = getLanguage()
     setLanguage(savedLanguage)
+
+    // Load test config
+    setTestConfig(getTestConfig())
   }, [])
 
   // Handle language change
@@ -74,6 +80,7 @@ function AppContent() {
     setTestStatus('testing')
     setErrorMessage('')
     setTestResult(null)
+    setIntermediateResults([])
 
     const prompt = customPrompt.trim() || defaultPrompt
 
@@ -83,28 +90,61 @@ function AppContent() {
       ? (customModel?.trim() || selectedModel.id)
       : selectedModel.id
 
+    const providerName = isCustomProvider
+      ? getProviderName('custom', language)
+      : getProviderName(selectedProvider.id, language)
+
+    const results = []
+    const runCount = testConfig.runCount
+
     try {
-      const result = await callLLMApi(baseUrl, apiKey, modelId, prompt)
+      for (let i = 0; i < runCount; i++) {
+        setCurrentRun(i + 1)
 
-      const providerName = isCustomProvider
-        ? getProviderName('custom', language)
-        : getProviderName(selectedProvider.id, language)
+        const result = await callLLMApi(baseUrl, apiKey, modelId, prompt, {
+          maxTokens: testConfig.maxTokens,
+          timeout: testConfig.timeout * 1000,
+        })
 
-      const fullResult = {
-        ...result,
-        provider: providerName,
-        model: modelId,
+        const fullResult = {
+          ...result,
+          provider: providerName,
+          model: modelId,
+        }
+
+        results.push(fullResult)
+        setIntermediateResults([...results])
+
+        // If not the last run, briefly show intermediate result
+        if (i < runCount - 1) {
+          setTestResult(fullResult)
+        }
       }
 
-      // Save to history
-      const savedRecord = saveResult(fullResult)
+      // Calculate averages
+      const avg = (arr, key) => arr.reduce((sum, r) => sum + (r[key] || 0), 0) / arr.length
+
+      const avgResult = {
+        ttft: Math.round(avg(results, 'ttft')),
+        latency: Math.round(avg(results, 'latency')),
+        throughput: parseFloat((avg(results, 'throughput')).toFixed(2)),
+        effectiveTps: parseFloat((avg(results, 'effectiveTps')).toFixed(2)),
+        outputTokens: Math.round(avg(results, 'outputTokens')),
+        provider: providerName,
+        model: modelId,
+        runCount: runCount,
+        isAverage: true,
+      }
+
+      // Save average result to history
+      saveResult(avgResult)
       setHistory(getHistory())
-      setTestResult(fullResult)
+      setTestResult(avgResult)
       setTestStatus('success')
 
       triggerToast('success',
         language === 'zh' ? '测试完成！' : 'Test completed!',
-        `${providerName} - ${modelId}`
+        `${providerName} - ${modelId} (${language === 'zh' ? `平均 ${runCount} 次` : `avg of ${runCount}`})`
       )
     } catch (error) {
       const errorMsg = error.message || (language === 'zh' ? '测试失败，请重试' : 'Test failed, please try again')
@@ -115,6 +155,11 @@ function AppContent() {
         errorMsg
       )
     }
+  }
+
+  // Handle test config change
+  const handleTestConfigChange = (config) => {
+    setTestConfig(config)
   }
 
   // Handle delete record
@@ -188,6 +233,8 @@ function AppContent() {
           onTest={handleTest}
           testStatus={testStatus}
           language={language}
+          testConfig={testConfig}
+          onTestConfigChange={handleTestConfigChange}
         />
 
         <TestResult
@@ -195,6 +242,9 @@ function AppContent() {
           result={testResult}
           error={errorMessage}
           language={language}
+          intermediateResults={intermediateResults}
+          currentRun={currentRun}
+          runCount={testConfig.runCount}
         />
 
         <HistoryTable

@@ -85,6 +85,26 @@ export const translations = {
       zh: '测试中...',
       en: 'Testing...',
     },
+    maxTokens: {
+      zh: 'Max Tokens',
+      en: 'Max Tokens',
+    },
+    runCount: {
+      zh: '测试次数',
+      en: 'Run Count',
+    },
+    timeout: {
+      zh: '超时时间',
+      en: 'Timeout',
+    },
+    seconds: {
+      zh: '秒',
+      en: 's',
+    },
+    advancedConfig: {
+      zh: '高级配置',
+      en: 'Advanced Config',
+    },
     error: {
       noApiKey: {
         zh: '请输入 API Key',
@@ -143,6 +163,14 @@ export const translations = {
         zh: '测试失败',
         en: 'Test Failed',
       },
+    },
+    intermediateTitle: {
+      zh: '第 {current}/{total} 次测试结果',
+      en: 'Run {current}/{total} Results',
+    },
+    finalTitle: {
+      zh: '平均 {count} 次测试结果',
+      en: 'Average of {count} Runs',
     },
   },
 

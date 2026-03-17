@@ -1,17 +1,33 @@
-import { Clock, Zap, FileText, XCircle, Loader2, Gauge, Activity } from 'lucide-react'
+import { Clock, Zap, FileText, XCircle, Loader2, Gauge, Activity, AlertTriangle } from 'lucide-react'
 import { t } from '../config/i18n'
 import { Card, CardContent } from './ui/card'
 
-export default function TestResult({ status, result, error, language }) {
+export default function TestResult({ status, result, error, language, intermediateResults = [], currentRun = 0, runCount = 1 }) {
   if (status === 'ready') {
     return null
   }
+
+  // Get title based on run status
+  const getTitle = () => {
+    if (status === 'success' && result?.isAverage) {
+      return t('result.finalTitle', language).replace('{count}', runCount)
+    }
+    if (currentRun > 0 && currentRun <= runCount && !result?.isAverage) {
+      return t('result.intermediateTitle', language)
+        .replace('{current}', currentRun)
+        .replace('{total}', runCount)
+    }
+    return t('result.title', language)
+  }
+
+  // Check if there's a failed run
+  const hasFailedRun = status === 'error' && intermediateResults.length > 0
 
   return (
     <Card className="mb-6">
       <CardContent className="pt-6">
         <h2 className="text-lg font-semibold mb-4">
-          {t('result.title', language)}
+          {getTitle()}
         </h2>
 
         {status === 'testing' && (
@@ -31,6 +47,16 @@ export default function TestResult({ status, result, error, language }) {
                 {t('result.error.title', language)}
               </p>
               <p className="text-sm text-red-600 mt-1">{error}</p>
+              {hasFailedRun && (
+                <div className="flex items-center gap-2 mt-2 text-sm text-amber-600">
+                  <AlertTriangle size={16} />
+                  <span>
+                    {language === 'zh'
+                      ? `已完成 ${intermediateResults.length}/${runCount} 次测试后失败`
+                      : `Failed after ${intermediateResults.length}/${runCount} completed runs`}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         )}

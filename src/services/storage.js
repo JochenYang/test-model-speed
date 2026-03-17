@@ -8,6 +8,14 @@ const STORAGE_KEYS = {
   HISTORY: 'llm_tester_history',
   LANGUAGE: 'llm_tester_language',
   SAVE_API_KEY: 'llm_tester_save_api_key',
+  TEST_CONFIG: 'llm_tester_test_config',
+}
+
+// Default test configuration
+export const DEFAULT_TEST_CONFIG = {
+  maxTokens: 2048,
+  runCount: 3,
+  timeout: 120, // seconds
 }
 
 /**
@@ -194,4 +202,30 @@ export function exportCSV() {
 export function exportJSON() {
   const history = getHistory()
   return JSON.stringify(history, null, 2)
+}
+
+/**
+ * Test configuration operations
+ */
+export function getTestConfig() {
+  try {
+    const data = localStorage.getItem(STORAGE_KEYS.TEST_CONFIG)
+    if (data) {
+      return { ...DEFAULT_TEST_CONFIG, ...JSON.parse(data) }
+    }
+    return DEFAULT_TEST_CONFIG
+  } catch (error) {
+    console.error('Failed to get test config:', error)
+    return DEFAULT_TEST_CONFIG
+  }
+}
+
+export function saveTestConfig(config) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.TEST_CONFIG, JSON.stringify(config))
+    return true
+  } catch (error) {
+    console.error('Failed to save test config:', error)
+    return false
+  }
 }
