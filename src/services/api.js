@@ -5,6 +5,31 @@
 
 const isProd = import.meta.env.PROD
 
+function normalizeEndpointPath(path) {
+  const fallback = '/chat/completions'
+  if (!path || typeof path !== 'string') return fallback
+  const trimmed = path.trim()
+  if (!trimmed) return fallback
+  if (trimmed.includes('://')) return fallback
+  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`
+}
+
+function sanitizeHeaders(input) {
+  if (!input || typeof input !== 'object') return {}
+
+  const blocked = new Set(['authorization', 'content-type', 'content-length', 'host'])
+  const output = {}
+
+  for (const [rawKey, rawValue] of Object.entries(input)) {
+    const key = String(rawKey || '').trim()
+    if (!key) continue
+    if (blocked.has(key.toLowerCase())) continue
+    output[key] = String(rawValue ?? '')
+  }
+
+  return output
+}
+
 /**
  * Estimate tokens using improved algorithm for mixed Chinese/English content
  * @param {string} text - Generated text
@@ -21,7 +46,7 @@ function estimateTokens(text) {
   const englishWords = textWithoutChinese.split(/\s+/).filter(w => w.length > 0)
 
   // Count punctuation (each punctuation mark ~= 0.3 tokens)
-  const punctuationCount = (text.match(/[\p{P}]/u) || []).length
+  const punctuationCount = (text.match(/[\p{P}]/gu) || []).length
 
   // Calculation: Chinese * 0.55 + English words * 1.3 + Punctuation * 0.3
   return Math.max(1, Math.ceil(
@@ -43,11 +68,20 @@ function estimateTokens(text) {
  * @returns {Promise<{ttft: number, latency: number, throughput: number, effectiveTps: number, outputTokens: number}>}
  */
 export async function callLLMApi(baseUrl, apiKey, model, prompt, options = {}) {
-  const { maxTokens = 2048, timeout = 120000 } = options
+  const {
+    maxTokens = 2048,
+    timeout = 120000,
+    endpointPath = '/chat/completions',
+    extraHeaders = {},
+  } = options
+
+  const normalizedPath = normalizeEndpointPath(endpointPath)
+  const normalizedHeaders = sanitizeHeaders(extraHeaders)
+  const normalizedBaseUrl = String(baseUrl || '').replace(/\/+$/, '')
 
   // Production: use Vercel proxy to avoid CORS
   // Development: direct call
-  const url = isProd ? '/api/proxy' : `${baseUrl}/chat/completions`
+  const url = isProd ? '/api/proxy' : `${normalizedBaseUrl}${normalizedPath}`
 
   // Build request body
   const requestBase = {
@@ -59,7 +93,7 @@ export async function callLLMApi(baseUrl, apiKey, model, prompt, options = {}) {
   }
 
   const requestBody = isProd
-    ? { ...requestBase, baseUrl, apiKey }
+    ? { ...requestBase, baseUrl: normalizedBaseUrl, apiKey, endpointPath: normalizedPath, extraHeaders: normalizedHeaders }
     : requestBase
 
   // Build headers
@@ -68,12 +102,14 @@ export async function callLLMApi(baseUrl, apiKey, model, prompt, options = {}) {
     : {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
+        ...normalizedHeaders,
       }
 
   const startTime = performance.now()
   let ttft = null
   let firstTokenTime = null
   let finalTokens = 0
+  let tokenSource = 'estimated'
 
   // Set up AbortController for timeout
   const controller = new AbortController()
@@ -133,8 +169,9 @@ export async function callLLMApi(baseUrl, apiKey, model, prompt, options = {}) {
 
           // Try to get token usage from the stream
           // Some providers (e.g., MiniMax) send usage in a separate chunk with empty choices
-          if (data.usage && data.usage.completion_tokens) {
+          if (data.usage && Number.isFinite(data.usage.completion_tokens)) {
             finalTokens = data.usage.completion_tokens
+            tokenSource = 'official'
           }
 
           let content = data.choices?.[0]?.delta?.content
@@ -169,6 +206,7 @@ export async function callLLMApi(baseUrl, apiKey, model, prompt, options = {}) {
   // Improved token estimation if usage is not provided
   if (finalTokens === 0) {
     finalTokens = estimateTokens(generatedText)
+    tokenSource = 'estimated'
   }
 
   // Calculate steady throughput
@@ -193,5 +231,6 @@ export async function callLLMApi(baseUrl, apiKey, model, prompt, options = {}) {
     throughput: parseFloat(throughput.toFixed(2)),
     effectiveTps: parseFloat(effectiveTps.toFixed(2)),
     outputTokens: finalTokens,
+    tokenSource,
   }
 }

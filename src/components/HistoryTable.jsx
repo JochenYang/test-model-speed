@@ -97,7 +97,12 @@ export default function HistoryTable({
                   {new Date(item.timestamp).toLocaleString()}
                 </TableCell>
                 <TableCell className="font-medium whitespace-nowrap">{item.provider}</TableCell>
-                <TableCell className="font-mono text-slate-600">{item.model}</TableCell>
+                <TableCell className="font-mono text-slate-600">
+                  <div>{item.model}</div>
+                  <div className="text-xs text-slate-400 mt-1">
+                    {(item.runCount || 1)} runs | {(item.successRate ?? 100)}% | {item.tokenSource || 'unknown'}
+                  </div>
+                </TableCell>
                 <TableCell className="text-right whitespace-nowrap">
                   {(item.ttft || item.latency)} ms
                 </TableCell>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Eye, EyeOff, Play, Loader2, Settings } from 'lucide-react'
+import { Eye, EyeOff, Play, Loader2 } from 'lucide-react'
 import { t, getProviderName } from '../config/i18n'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
@@ -13,7 +13,14 @@ import {
 } from './ui/select'
 import { Checkbox } from './ui/checkbox'
 import { Label } from './ui/label'
-import { getApiKey as getStoredApiKey, saveApiKey as storeApiKey, getSaveApiKeyPreference, setSaveApiKeyPreference, getTestConfig, saveTestConfig } from '../services/storage'
+import {
+  getApiKey as getStoredApiKey,
+  saveApiKey as storeApiKey,
+  getSaveApiKeyPreference,
+  setSaveApiKeyPreference,
+  getCustomProviderConfig,
+  saveCustomProviderConfig,
+} from '../services/storage'
 
 export default function TestForm({
   providers,
@@ -28,19 +35,14 @@ export default function TestForm({
   onTest,
   testStatus,
   language,
-  testConfig,
-  onTestConfigChange,
 }) {
   const [showApiKey, setShowApiKey] = useState(false)
   const [customModelInput, setCustomModelInput] = useState('')
   const [customUrlInput, setCustomUrlInput] = useState('')
+  const [customPathInput, setCustomPathInput] = useState('/chat/completions')
+  const [customHeadersInput, setCustomHeadersInput] = useState('')
   const [useCustomModel, setUseCustomModel] = useState(false)
   const [saveApiKeyEnabled, setSaveApiKeyEnabled] = useState(true)
-  const [localTestConfig, setLocalTestConfig] = useState(testConfig || {
-    maxTokens: 2048,
-    runCount: 3,
-    timeout: 120,
-  })
 
   const isTesting = testStatus === 'testing'
   const isCustomProvider = selectedProvider.id === 'custom'
@@ -48,17 +50,21 @@ export default function TestForm({
   // Load saved preferences
   useEffect(() => {
     setSaveApiKeyEnabled(getSaveApiKeyPreference())
-    const savedConfig = getTestConfig()
-    setLocalTestConfig(savedConfig)
-    onTestConfigChange(savedConfig)
   }, [])
 
-  // Load API key when provider changes
+  // Load API key and custom provider config when provider changes
   useEffect(() => {
-    if (selectedProvider) {
-      const savedKey = getStoredApiKey(selectedProvider.id)
-      // If has saved key, load it; otherwise clear the input
-      onApiKeyChange(savedKey || '')
+    if (!selectedProvider) return
+
+    const savedKey = getStoredApiKey(selectedProvider.id)
+    onApiKeyChange(savedKey || '')
+
+    if (selectedProvider.id === 'custom') {
+      const savedCustomConfig = getCustomProviderConfig()
+      setCustomUrlInput(savedCustomConfig.baseUrl || '')
+      setCustomModelInput(savedCustomConfig.model || '')
+      setCustomPathInput(savedCustomConfig.path || '/chat/completions')
+      setCustomHeadersInput(savedCustomConfig.headers || '')
     }
   }, [selectedProvider, onApiKeyChange])
 
@@ -85,6 +91,25 @@ export default function TestForm({
     }
   }
 
+  const handleStartTest = () => {
+    if (isCustomProvider) {
+      saveCustomProviderConfig({
+        baseUrl: customUrlInput.trim(),
+        model: customModelInput.trim(),
+        path: customPathInput.trim() || '/chat/completions',
+        headers: customHeadersInput,
+      })
+    }
+
+    onTest({
+      customUrl: customUrlInput,
+      customModel: customModelInput,
+      useCustomModel,
+      customPath: customPathInput,
+      customHeaders: customHeadersInput,
+    })
+  }
+
   return (
     <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 mb-6">
       <h2 className="text-lg font-semibold mb-4">
@@ -99,6 +124,7 @@ export default function TestForm({
             value={selectedProvider.id}
             onValueChange={(value) => {
               const provider = providers.find((p) => p.id === value)
+              if (!provider) return
               onProviderChange(provider)
               setUseCustomModel(false)
             }}
@@ -180,17 +206,48 @@ export default function TestForm({
         </div>
       </div>
 
-      {/* Custom Provider - Model Input */}
+      {/* Custom Provider fields */}
       {isCustomProvider && (
-        <div className="mb-4">
-          <Label className="mb-1 block">{t('form.modelName', language)}</Label>
-          <Input
-            type="text"
-            value={customModelInput}
-            onChange={(e) => setCustomModelInput(e.target.value)}
-            placeholder={t('form.placeholder.customModel', language)}
-            disabled={isTesting}
-          />
+        <div className="mb-4 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label className="mb-1 block">
+                {language === 'zh' ? 'API 路径' : 'API Path'}
+              </Label>
+              <Input
+                type="text"
+                value={customPathInput}
+                onChange={(e) => setCustomPathInput(e.target.value)}
+                placeholder="/chat/completions"
+                disabled={isTesting}
+              />
+            </div>
+            <div>
+              <Label className="mb-1 block">{t('form.modelName', language)}</Label>
+              <Input
+                type="text"
+                value={customModelInput}
+                onChange={(e) => setCustomModelInput(e.target.value)}
+                placeholder={t('form.placeholder.customModel', language)}
+                disabled={isTesting}
+              />
+            </div>
+          </div>
+
+          <div>
+            <Label className="mb-1 block">
+              {language === 'zh' ? '自定义请求头（JSON，可选）' : 'Custom Headers JSON (Optional)'}
+            </Label>
+            <Textarea
+              value={customHeadersInput}
+              onChange={(e) => setCustomHeadersInput(e.target.value)}
+              placeholder={language === 'zh'
+                ? '{"x-api-version":"2025-01-01"}'
+                : '{"x-api-version":"2025-01-01"}'}
+              rows={3}
+              disabled={isTesting}
+            />
+          </div>
         </div>
       )}
 
@@ -230,70 +287,6 @@ export default function TestForm({
         </div>
       </div>
 
-      {/* Advanced Config */}
-      <div className="mb-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
-        <div className="flex items-center gap-2 mb-3">
-          <Settings size={18} className="text-slate-500" />
-          <Label className="text-sm font-medium">{t('form.advancedConfig', language)}</Label>
-        </div>
-        <div className="grid grid-cols-3 gap-4">
-          <div>
-            <Label className="mb-1 block text-xs text-slate-500">{t('form.maxTokens', language)}</Label>
-            <Input
-              type="number"
-              min={256}
-              max={8192}
-              step={256}
-              value={localTestConfig.maxTokens}
-              onChange={(e) => {
-                const value = Math.max(256, Math.min(8192, parseInt(e.target.value) || 2048))
-                const newConfig = { ...localTestConfig, maxTokens: value }
-                setLocalTestConfig(newConfig)
-                onTestConfigChange(newConfig)
-                saveTestConfig(newConfig)
-              }}
-              disabled={isTesting}
-            />
-          </div>
-          <div>
-            <Label className="mb-1 block text-xs text-slate-500">{t('form.runCount', language)}</Label>
-            <Input
-              type="number"
-              min={1}
-              max={10}
-              value={localTestConfig.runCount}
-              onChange={(e) => {
-                const value = Math.max(1, Math.min(10, parseInt(e.target.value) || 3))
-                const newConfig = { ...localTestConfig, runCount: value }
-                setLocalTestConfig(newConfig)
-                onTestConfigChange(newConfig)
-                saveTestConfig(newConfig)
-              }}
-              disabled={isTesting}
-            />
-          </div>
-          <div>
-            <Label className="mb-1 block text-xs text-slate-500">
-              {t('form.timeout', language)} ({t('form.seconds', language)})
-            </Label>
-            <Input
-              type="number"
-              min={30}
-              max={300}
-              value={localTestConfig.timeout}
-              onChange={(e) => {
-                const value = Math.max(30, Math.min(300, parseInt(e.target.value) || 120))
-                const newConfig = { ...localTestConfig, timeout: value }
-                setLocalTestConfig(newConfig)
-                onTestConfigChange(newConfig)
-                saveTestConfig(newConfig)
-              }}
-              disabled={isTesting}
-            />
-          </div>
-        </div>
-      </div>
-
       {/* Custom Prompt */}
       <div className="mb-4">
         <Label className="mb-1 block">
@@ -313,7 +306,7 @@ export default function TestForm({
 
       {/* Test Button */}
       <Button
-        onClick={() => onTest(customUrlInput, customModelInput, useCustomModel)}
+        onClick={handleStartTest}
         disabled={
           isTesting ||
           !apiKey.trim() ||

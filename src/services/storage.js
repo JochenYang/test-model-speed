@@ -8,14 +8,14 @@ const STORAGE_KEYS = {
   HISTORY: 'llm_tester_history',
   LANGUAGE: 'llm_tester_language',
   SAVE_API_KEY: 'llm_tester_save_api_key',
-  TEST_CONFIG: 'llm_tester_test_config',
+  CUSTOM_PROVIDER_CONFIG: 'llm_tester_custom_provider_config',
 }
 
-// Default test configuration
-export const DEFAULT_TEST_CONFIG = {
-  maxTokens: 2048,
-  runCount: 3,
-  timeout: 120, // seconds
+const DEFAULT_CUSTOM_PROVIDER_CONFIG = {
+  baseUrl: '',
+  model: '',
+  path: '/chat/completions',
+  headers: '',
 }
 
 /**
@@ -148,6 +148,15 @@ export function saveResult(result) {
       throughput: result.throughput,
       effectiveTps: result.effectiveTps || 0,
       outputTokens: result.outputTokens,
+      runCount: result.runCount || 1,
+      warmupCount: result.warmupCount || 0,
+      successRate: result.successRate ?? 100,
+      failedRuns: result.failedRuns || 0,
+      tokenSource: result.tokenSource || 'unknown',
+      ttftP50: result.ttftP50 || result.ttft || result.latency,
+      ttftP95: result.ttftP95 || result.ttft || result.latency,
+      latencyP50: result.latencyP50 || result.latency,
+      latencyP95: result.latencyP95 || result.latency,
     }
     history.unshift(newRecord)
     // Keep latest 100 records
@@ -185,15 +194,35 @@ export function exportCSV() {
   const history = getHistory()
   if (history.length === 0) return ''
 
-  const headers = ['Time', 'Provider', 'Model', 'TTFT (ms)', 'Latency (ms)', 'TPS', 'Tokens']
+  const headers = [
+    'Time',
+    'Provider',
+    'Model',
+    'TTFT Avg (ms)',
+    'TTFT P95 (ms)',
+    'Latency Avg (ms)',
+    'Latency P95 (ms)',
+    'Effective TPS',
+    'Tokens',
+    'Runs',
+    'Warmup',
+    'Success Rate (%)',
+    'Token Source',
+  ]
   const rows = history.map(item => [
     new Date(item.timestamp).toLocaleString(),
     item.provider,
     item.model,
     item.ttft || item.latency,
+    item.ttftP95 || item.ttft || item.latency,
     item.latency,
+    item.latencyP95 || item.latency,
     item.effectiveTps || 0,
     item.outputTokens || '',
+    item.runCount || 1,
+    item.warmupCount || 0,
+    item.successRate ?? 100,
+    item.tokenSource || 'unknown',
   ])
 
   return [headers.join(','), ...rows.map(row => row.join(','))].join('\n')
@@ -205,27 +234,28 @@ export function exportJSON() {
 }
 
 /**
- * Test configuration operations
+ * Custom provider configuration
  */
-export function getTestConfig() {
+export function getCustomProviderConfig() {
   try {
-    const data = localStorage.getItem(STORAGE_KEYS.TEST_CONFIG)
+    const data = localStorage.getItem(STORAGE_KEYS.CUSTOM_PROVIDER_CONFIG)
     if (data) {
-      return { ...DEFAULT_TEST_CONFIG, ...JSON.parse(data) }
+      return { ...DEFAULT_CUSTOM_PROVIDER_CONFIG, ...JSON.parse(data) }
     }
-    return DEFAULT_TEST_CONFIG
+    return DEFAULT_CUSTOM_PROVIDER_CONFIG
   } catch (error) {
-    console.error('Failed to get test config:', error)
-    return DEFAULT_TEST_CONFIG
+    console.error('Failed to get custom provider config:', error)
+    return DEFAULT_CUSTOM_PROVIDER_CONFIG
   }
 }
 
-export function saveTestConfig(config) {
+export function saveCustomProviderConfig(config) {
   try {
-    localStorage.setItem(STORAGE_KEYS.TEST_CONFIG, JSON.stringify(config))
+    const merged = { ...DEFAULT_CUSTOM_PROVIDER_CONFIG, ...config }
+    localStorage.setItem(STORAGE_KEYS.CUSTOM_PROVIDER_CONFIG, JSON.stringify(merged))
     return true
   } catch (error) {
-    console.error('Failed to save test config:', error)
+    console.error('Failed to save custom provider config:', error)
     return false
   }
 }

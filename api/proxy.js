@@ -5,10 +5,35 @@
 
 export const runtime = 'edge'
 
+function normalizeEndpointPath(path) {
+  const fallback = '/chat/completions'
+  if (!path || typeof path !== 'string') return fallback
+  const trimmed = path.trim()
+  if (!trimmed) return fallback
+  if (trimmed.includes('://')) return fallback
+  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`
+}
+
+function sanitizeHeaders(input) {
+  if (!input || typeof input !== 'object') return {}
+
+  const blocked = new Set(['authorization', 'content-type', 'content-length', 'host'])
+  const safeHeaders = {}
+
+  for (const [rawKey, rawValue] of Object.entries(input)) {
+    const key = String(rawKey || '').trim()
+    if (!key) continue
+    if (blocked.has(key.toLowerCase())) continue
+    safeHeaders[key] = String(rawValue ?? '')
+  }
+
+  return safeHeaders
+}
+
 export async function POST(request) {
   const body = await request.json()
 
-  const { baseUrl, apiKey, model, messages, stream } = body
+  const { baseUrl, apiKey, model, messages, stream, endpointPath, extraHeaders } = body
 
   if (!baseUrl || !apiKey || !model || !messages) {
     return new Response(JSON.stringify({ error: 'Missing required fields' }), {
@@ -18,11 +43,16 @@ export async function POST(request) {
   }
 
   try {
-    const response = await fetch(`${baseUrl}/chat/completions`, {
+    const normalizedBaseUrl = String(baseUrl).replace(/\/+$/, '')
+    const normalizedPath = normalizeEndpointPath(endpointPath)
+    const safeHeaders = sanitizeHeaders(extraHeaders)
+
+    const response = await fetch(`${normalizedBaseUrl}${normalizedPath}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
+        ...safeHeaders,
       },
       body: JSON.stringify({
         model,
@@ -49,7 +79,6 @@ export async function POST(request) {
       const readableStream = new ReadableStream({
         async start(controller) {
           const reader = response.body.getReader()
-          const encoder = new TextEncoder()
 
           while (true) {
             const { done, value } = await reader.read()
