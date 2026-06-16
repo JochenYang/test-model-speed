@@ -259,3 +259,35 @@ export function saveCustomProviderConfig(config) {
     return false
   }
 }
+
+/**
+ * Migrate a stored result to the current schema.
+ * - v1 (no schemaVersion): copy outputTokens → completionTokens, mark source unknown, aggregate null.
+ * - v2: return as-is.
+ * @param {object} record
+ * @returns {object}
+ */
+export function migrateResult(record) {
+  if (!record) return record
+  if (record.schemaVersion === 'v2') return record
+
+  return {
+    ...record,
+    schemaVersion: 'v2',
+    completionTokens: record.outputTokens ?? 0,
+    tokenSource: 'unknown',
+    aggregate: null,
+    networkBaseline: null,
+    benchmarkVersion: '2.0',
+  }
+}
+
+/**
+ * Read history with automatic migration.
+ * @returns {Array<object>}
+ */
+export function getHistoryMigrated() {
+  const raw = getHistory()
+  if (!Array.isArray(raw)) return []
+  return raw.map(migrateResult)
+}
