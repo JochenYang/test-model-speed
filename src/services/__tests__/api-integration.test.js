@@ -109,3 +109,65 @@ describe('callLLMApi — SSE shapes', () => {
       .rejects.toMatchObject({ status: 401, cause: 'http_error' })
   })
 })
+
+describe('callLLMApi — SSE parse errors (S7)', () => {
+  beforeEach(() => {
+    globalThis.fetch = vi.fn()
+  })
+
+  function buildRawSseStream(rawText) {
+    const encoder = new TextEncoder()
+    return new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(rawText))
+        controller.close()
+      },
+    })
+  }
+
+  it('counts malformed data: chunks in parseErrorCount and still succeeds', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      body: buildRawSseStream(
+        'data: this is not json\n\n'
+        + `data: ${JSON.stringify({ choices: [{ delta: { content: 'hi' } }] })}\n\n`
+        + 'data: also not json {{ broken\n\n'
+        + `data: ${JSON.stringify({ usage: { prompt_tokens: 1, completion_tokens: 1 } })}\n\n`
+        + 'data: [DONE]\n\n',
+      ),
+    })
+
+    const r = await callLLMApi('https://example.com', 'k', 'm', 'hi')
+    expect(r.parseErrorCount).toBe(2)
+    expect(r.completionTokens).toBe(1)
+    expect(r.tokenSource).toBe('official')
+  })
+
+  it('returns parseErrorCount=N when ALL data: chunks are malformed (no throw)', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      body: buildRawSseStream(
+        'data: broken { json\n\n'
+        + 'data: still broken ::\n\n'
+        + 'data: [DONE]\n\n',
+      ),
+    })
+
+    const r = await callLLMApi('https://example.com', 'k', 'm', 'hi')
+    expect(r.parseErrorCount).toBe(2)
+    expect(r.completionTokens).toBe(0)
+  })
+
+  it('parseErrorCount is 0 on a clean stream', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      body: buildSseStream([
+        { choices: [{ delta: { content: 'ok' } }] },
+        { usage: { prompt_tokens: 1, completion_tokens: 1 } },
+      ]),
+    })
+
+    const r = await callLLMApi('https://example.com', 'k', 'm', 'hi')
+    expect(r.parseErrorCount).toBe(0)
+  })
+})

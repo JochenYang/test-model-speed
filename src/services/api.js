@@ -48,6 +48,7 @@ function sanitizeHeaders(input) {
  *   chunkCount: number,
  *   chunkIntervals: number[],
  *   tokenSource: 'official'|'tokenizer'|'estimated',
+ *   parseErrorCount: number,   // count of malformed SSE data: chunks skipped
  * }
  */
 export async function callLLMApi(baseUrl, apiKey, model, prompt, options = {}) {
@@ -120,6 +121,7 @@ export async function callLLMApi(baseUrl, apiKey, model, prompt, options = {}) {
   let lastChunkTime = firstByteTime
   let chunkCount = 0
   const chunkIntervals = []
+  let parseErrorCount = 0
 
   let promptTokens = 0
   let completionTokens = 0
@@ -166,7 +168,7 @@ export async function callLLMApi(baseUrl, apiKey, model, prompt, options = {}) {
           ?? data?.content
         if (content) generatedText += content
       } catch {
-        // ignore parse errors
+        parseErrorCount++
       }
     }
   }
@@ -197,6 +199,7 @@ export async function callLLMApi(baseUrl, apiKey, model, prompt, options = {}) {
     chunkCount,
     chunkIntervals,
     tokenSource,
+    parseErrorCount,
   }
 }
 
