@@ -30,17 +30,17 @@
 | 稳定吞吐 | 纯生成速度，不含首 Token (tokens/s)         |
 | 有效吞吐 | 用户感知速度，含首 Token (tokens/s)         |
 
-## 支持的提供商和模型
+## 支持的提供商
 
-| 提供商                | 模型                                                            |
-| --------------------- | --------------------------------------------------------------- |
-| 阿里百炼 (DashScope)  | qwen3.5-plus, qwen3-max                                         |
-| 火山引擎 (Volcengine) | doubao-seed-2-0-pro, doubao-seed-2-0-lite, doubao-seed-2-0-code |
-| 智谱 AI               | glm-4.5, glm-4.6, glm-4.7, glm-5                                |
-| MiniMax (国内版)      | Minimax-M2, M2.1, M2.5, M2.5-highspeed                          |
-| MiniMax (国际版)      | Minimax-M2, M2.1, M2.5, M2.5-highspeed                          |
-| Kimi                  | kimi-for-coding                                                 |
-| 自定义                | 任意 OpenAI 兼容 API                                            |
+| 提供商                | 模型                                                                   |
+| --------------------- | ---------------------------------------------------------------------- |
+| 阿里百炼 (DashScope)  | 来自 [models.dev](https://models.dev/alibaba),自动更新                 |
+| 火山引擎 (Volcengine) | 来自 [models.dev](https://models.dev/volcengine),自动更新              |
+| 智谱 AI               | 来自 [models.dev](https://models.dev/zhipuai),自动更新                 |
+| MiniMax (国内版)      | 来自 [models.dev](https://models.dev/minimax),自动更新                 |
+| MiniMax (国际版)      | 来自 [models.dev](https://models.dev/minimax),自动更新                 |
+| Kimi                  | 来自 [models.dev](https://models.dev/moonshotai),自动更新              |
+| 自定义                | 任意 OpenAI 兼容 API                                                    |
 
 ## 快速开始
 
@@ -78,7 +78,15 @@ npm run build
 - Sonner (Toast 通知)
 - Lucide React
 
-## 实现原理
+## 实现原理 (v2)
+
+1. **多轮测量**：每次测速默认 warmup 1 次 + 测量 3 次，输出 AVG / P50 / P95 / 标准差
+2. **TTFT 严格口径**：分 `ttfb`（纯网络）和 `ttft`（纯模型）两个字段
+3. **Token 精度**：优先官方 usage，降级到 gpt-tokenizer (cl100k_base)，最后字符估算；`tokenSource` 始终输出
+4. **网络基线**：测速前探测 3 次 OPTIONS，取 P50 RTT + jitter，UI 给出 `良好 / 一般 / 较差 / 未知` 徽章
+5. **模型数据源**：来自 [models.dev](https://models.dev)，24h 边缘缓存 + 6h 客户端缓存 + 内置兜底
+
+## 实现原理 (旧版 v1)
 
 1. **TTFT 测量**：使用流式响应 (SSE)，记录从请求发出到收到第一个有效内容 Chunk 的时间。
 2. **指标计算**：采用单次流式请求配合 `stream_options: { include_usage: true }`。

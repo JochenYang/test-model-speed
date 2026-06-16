@@ -30,17 +30,17 @@ Supports Major Domestic Model Providers
 | Steady TPS    | Pure generation speed excluding first token (tokens/s)    |
 | Effective TPS | User-perceived speed including first token (tokens/s)     |
 
-## Supported Providers & Models
+## Supported Providers
 
-| Provider            | Models                                                          |
-| ------------------- | --------------------------------------------------------------- |
-| DashScope (Alibaba) | qwen3.5-plus, qwen3-max                                         |
-| Volcengine          | doubao-seed-2-0-pro, doubao-seed-2-0-lite, doubao-seed-2-0-code |
-| Zhipu AI            | glm-4.5, glm-4.6, glm-4.7, glm-5                                |
-| Minimax (Domestic)  | Minimax-M2, M2.1, M2.5, M2.5-highspeed                          |
-| Minimax (Intl)      | Minimax-M2, M2.1, M2.5, M2.5-highspeed                          |
-| Kimi                | kimi-for-coding                                                 |
-| Custom              | Any OpenAI-compatible API                                       |
+| Provider            | Models                                                            |
+| ------------------- | ----------------------------------------------------------------- |
+| DashScope (Alibaba) | Sourced from [models.dev](https://models.dev/alibaba), auto-updated |
+| Volcengine          | Sourced from [models.dev](https://models.dev/volcengine), auto-updated |
+| Zhipu AI            | Sourced from [models.dev](https://models.dev/zhipuai), auto-updated |
+| Minimax (Domestic)  | Sourced from [models.dev](https://models.dev/minimax), auto-updated |
+| Minimax (Intl)      | Sourced from [models.dev](https://models.dev/minimax), auto-updated |
+| Kimi                | Sourced from [models.dev](https://models.dev/moonshotai), auto-updated |
+| Custom              | Any OpenAI-compatible API                                         |
 
 ## Quick Start
 
@@ -78,7 +78,15 @@ Build output is in the `dist` directory.
 - Sonner (Toast notifications)
 - Lucide React
 
-## Implementation Principles
+## Implementation Principles (v2)
+
+1. **Multi-round Measurement**: Each test runs 1 warmup + 3 measured rounds by default; outputs AVG / P50 / P95 / StdDev for every metric.
+2. **Strict TTFT Semantics**: `ttfb` (network only) and `ttft` (model only) are reported as separate fields.
+3. **Token Accuracy**: Official `usage` → gpt-tokenizer (cl100k_base) → character-based fallback. `tokenSource` is always reported.
+4. **Network Baseline**: 3 OPTIONS probes run before measurement; P50 RTT + jitter surface a `good / fair / poor / unknown` badge in the UI.
+5. **Model Data Source**: [models.dev](https://models.dev) feeds the model list, with 24h edge cache + 6h client cache + built-in fallback.
+
+## Implementation Principles (legacy v1)
 
 1. **TTFT Measurement**: Uses streaming response (SSE), recording the time from request start to the first valid content chunk.
 2. **Metric Calculation**: Uses a single streaming request with `stream_options: { include_usage: true }`.

@@ -87,14 +87,16 @@
 
 ### 4.1 聚合规则
 
-每个核心指标均计算：
+每个核心指标均计算（v2 真正生效，由 `src/services/aggregate.js` 与 `src/services/benchmark.js` 实现）：
 - AVG
-- P50
+- P50（线性插值，NIST type 7）
 - P95
-- Std Dev
+- Std Dev（样本标准差，n-1 分母）
+- min / max / samples
 
 覆盖指标：
-- TTFT
+- TTFT（首 token，模型段）
+- TTFB（首字节，纯网络段）
 - Latency
 - Steady TPS
 - Effective TPS
@@ -107,13 +109,21 @@
   - 失败轮次数
   - “结果基于成功轮次”提示
 - 若全部测量轮失败，则报错结束。
+- HTTP 401 / 403 / 404 立即中止（明确报错，不计入失败轮）。
+
+### 4.3 网络基线（v2 新增）
+
+- 测速开始前由 `src/services/networkProbe.js` 探测 3 次 OPTIONS。
+- 输出 P50 RTT 与 jitter，写入 `aggregate.networkBaseline`。
+- UI 徽章：`good (rtt<100ms)` / `fair (100-300ms)` / `poor (>300ms)` / `unknown`。
+- 探测失败时回退 localStorage 缓存（7 天 TTL），仍失败则 `networkBaseline = null`，**不阻塞测速**。
 
 ## 5. 关键调用链
 
 1. 用户在 `TestForm` 点击开始测试
-2. `App.handleTest` 执行预热与测量循环
-3. `callLLMApi` 发起流式请求并计算单轮指标
-4. `App` 聚合统计并更新 `TestResult`
+2. `App.handleTest` 调用 `runBenchmark`
+3. `runBenchmark` → `probeNetwork`（3 次 OPTIONS）→ `callLLMApi`（warmup + 测量）→ `aggregateMetric`
+4. `App` 接收 `AggregateResult` 并更新 `TestResult`
 5. `saveResult` 写入历史，`HistoryTable` 展示
 
 ## 6. 风险与后续建议
@@ -121,3 +131,10 @@
 - 并发风险：当前是串行测量，稳定但耗时较长；若加并发需考虑限流与重试。
 - 安全风险：API Key 仍是本地存储，建议后续增加“仅会话保存”模式。
 - 可观测性：可进一步增加每轮原始日志导出，便于复盘异常波动。
+
+## 7. 数据源升级（v2 新增）
+
+- 模型列表由 [models.dev](https://models.dev) 驱动，`src/services/modelsService.js` 负责拉取 + 合并 + fallback。
+- 缓存三层：Vercel Edge 24h（`api/models-cache.js`）→ 客户端 localStorage 6h → 内置 `providers.js`。
+- 默认隐藏 `deprecated` 与 `released_at > 180 天` 的旧模型；UI 暴露 `showDeprecated` / `showBetaPreview` 切换。
+- 自定义 provider 仍走 `isCustom` 路径，不参与 models.dev 数据源。
