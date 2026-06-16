@@ -17,6 +17,12 @@ import { providers as localProviders } from '../config/providers.js'
 const LOCAL_STORAGE_KEY = 'models.dev.cache.v1'
 const TTL_MS = 6 * 60 * 60 * 1000
 
+// Dev mode hits models.dev directly (public API, CORS-enabled, no key).
+// Prod mode routes through the Vercel Edge Function for 24h s-maxage cache
+// and to keep the upstream origin off the client.
+const MODELS_DEV_DIRECT = 'https://models.dev/api.json'
+const MODELS_CACHE_PROXY = '/api/models-cache'
+
 const PROVIDER_MAP = {
   aliyun: 'alibaba',
   volcano: 'volcengine',
@@ -62,8 +68,9 @@ export async function fetchMergedModels({
   providerMap = PROVIDER_MAP,
   prefs = {},
   fetcher = (...args) => fetch(...args),
+  endpointUrl, // optional test seam; defaults based on import.meta.env.PROD
 } = {}) {
-  const remote = await fetchRemote(fetcher)
+  const remote = await fetchRemote(fetcher, endpointUrl)
   const byProvider = remote?.providers || remote || {}
 
   return local.map((p) => {
@@ -76,9 +83,10 @@ export async function fetchMergedModels({
   })
 }
 
-async function fetchRemote(fetcher) {
+async function fetchRemote(fetcher, endpointUrl) {
+  const url = endpointUrl ?? (import.meta.env.PROD ? MODELS_CACHE_PROXY : MODELS_DEV_DIRECT)
   try {
-    const r = await fetcher('/api/models-cache', { cache: 'no-cache' })
+    const r = await fetcher(url, { cache: 'no-cache' })
     if (!r.ok) throw new Error(`HTTP ${r.status}`)
     const data = await r.json()
     saveCache(data)
