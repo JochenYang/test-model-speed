@@ -28,9 +28,11 @@ const PROVIDER_MAP = {
 
 /**
  * Apply user-controlled filter rules to a list of upstream models.
- * - Hide models with status === 'deprecated' (unless showDeprecated).
- * - Hide models with status === 'beta' (only when showBetaPreview === false,
- *   so beta is kept by default — aligns with plan test contract).
+ * - Hide models with status === 'deprecated' (unless showDeprecated is true).
+ * - Hide models with status === 'beta' (unless showBetaPreview is true).
+ *   Per spec [S3.2], beta/preview models are HIDDEN by default — users
+ *   must explicitly opt in. `showBetaPreview === undefined` is treated
+ *   as falsy, so the default behavior is to hide beta.
  * - Hide models with released_at older than 180 days.
  * @param {Array<object>} models
  * @param {{showDeprecated?:boolean, showBetaPreview?:boolean}} prefs
@@ -40,7 +42,7 @@ export function applyFilters(models, prefs = {}) {
   const cutoff = Date.now() - 180 * 24 * 3600 * 1000
   return models.filter((m) => {
     if (!prefs.showDeprecated && m.status === 'deprecated') return false
-    if (prefs.showBetaPreview === false && m.status === 'beta') return false
+    if (!prefs.showBetaPreview && m.status === 'beta') return false
     if (m.released_at && new Date(m.released_at).getTime() < cutoff) return false
     return true
   })

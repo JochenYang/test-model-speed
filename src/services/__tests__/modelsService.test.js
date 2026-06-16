@@ -9,19 +9,24 @@ describe('applyFilters', () => {
     { id: 'd-preview', status: 'beta', released_at: '2026-06-01' },
   ]
 
-  it('hides deprecated and > 180 days old by default', () => {
+  it('hides deprecated, > 180 days old, and beta/preview by default (spec S3.2)', () => {
     const r = applyFilters(models, {})
+    expect(r.map((m) => m.id)).toEqual(['a-stable'])
+  })
+
+  it('shows deprecated when showDeprecated is true (beta still hidden by default)', () => {
+    const r = applyFilters(models, { showDeprecated: true })
+    expect(r.map((m) => m.id)).toEqual(['a-stable', 'b-deprecated'])
+  })
+
+  it('shows beta when showBetaPreview is true', () => {
+    const r = applyFilters(models, { showBetaPreview: true })
     expect(r.map((m) => m.id)).toEqual(['a-stable', 'd-preview'])
   })
 
-  it('shows deprecated when showDeprecated is true', () => {
-    const r = applyFilters(models, { showDeprecated: true })
+  it('shows both deprecated and beta when both flags are true', () => {
+    const r = applyFilters(models, { showDeprecated: true, showBetaPreview: true })
     expect(r.map((m) => m.id)).toEqual(['a-stable', 'b-deprecated', 'd-preview'])
-  })
-
-  it('hides beta when showBetaPreview is false', () => {
-    const r = applyFilters(models, { showBetaPreview: false })
-    expect(r.map((m) => m.id)).toEqual(['a-stable'])
   })
 })
 

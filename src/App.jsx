@@ -17,14 +17,14 @@ const PREFS_STORAGE_KEY = 'models.dev.prefs.v1'
 function loadPrefs() {
   try {
     const raw = localStorage.getItem(PREFS_STORAGE_KEY)
-    if (!raw) return { showDeprecated: false, showBetaPreview: true }
+    if (!raw) return { showDeprecated: false, showBetaPreview: false }
     const parsed = JSON.parse(raw)
     return {
       showDeprecated: Boolean(parsed.showDeprecated),
       showBetaPreview: parsed.showBetaPreview !== false,
     }
   } catch {
-    return { showDeprecated: false, showBetaPreview: true }
+    return { showDeprecated: false, showBetaPreview: false }
   }
 }
 
@@ -73,7 +73,7 @@ function AppContent() {
   const [intermediateResults, setIntermediateResults] = useState([])
   const [currentRun, setCurrentRun] = useState(0)
   const [currentPhase, setCurrentPhase] = useState('warmup')
-  const [prefs, setPrefs] = useState({ showDeprecated: false, showBetaPreview: true })
+  const [prefs, setPrefs] = useState({ showDeprecated: false, showBetaPreview: false })
   const [modelsCachedAt, setModelsCachedAt] = useState(() => getModelsCacheTimestamp())
   const [modelsLoading, setModelsLoading] = useState(true)
 

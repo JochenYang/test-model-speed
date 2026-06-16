@@ -35,7 +35,7 @@ export default function TestForm({
   onTest,
   testStatus,
   language,
-  prefs = { showDeprecated: false, showBetaPreview: true },
+  prefs = { showDeprecated: false, showBetaPreview: false },
   onPrefsChange,
   modelsCachedAt = null,
   modelsLoading = false,
@@ -329,7 +329,7 @@ function renderFreshnessLabel(cachedAt, loading, language) {
             <label className="flex items-center gap-2 cursor-pointer">
               <Checkbox
                 id="showBetaPreview"
-                checked={prefs.showBetaPreview !== false}
+                checked={prefs.showBetaPreview === true}
                 onCheckedChange={(checked) =>
                   onPrefsChange({ ...prefs, showBetaPreview: checked === true })
                 }
