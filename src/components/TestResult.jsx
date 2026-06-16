@@ -9,6 +9,20 @@ const METRIC_LABELS = {
   effectiveTps: { zh: '有效吞吐', en: 'Effective TPS' },
 }
 
+const AGG_LABELS = {
+  ttft: { zh: 'TTFT', en: 'TTFT' },
+  ttfb: { zh: 'TTFB', en: 'TTFB' },
+  latency: { zh: '总耗时', en: 'Latency' },
+  steadyTps: { zh: '稳定吞吐', en: 'Steady TPS' },
+  effectiveTps: { zh: '有效吞吐', en: 'Effective TPS' },
+}
+
+function formatAgg(value, key) {
+  if (!Number.isFinite(value)) return '-'
+  if (['ttft', 'ttfb', 'latency'].includes(key)) return Math.round(value)
+  return Number(value).toFixed(2)
+}
+
 function metricUnit(metric) {
   if (metric === 'ttft' || metric === 'latency') return 'ms'
   return 'tokens/s'
@@ -185,6 +199,34 @@ export default function TestResult({
                 {language === 'zh'
                   ? `有 ${result.failedRuns} 轮测试失败，结果基于成功轮次统计。`
                   : `${result.failedRuns} runs failed. Statistics are based on successful runs.`}
+              </div>
+            )}
+
+            {result.aggregate && (
+              <div className="p-4 bg-white border border-slate-200 rounded-lg">
+                <h4 className="text-sm font-semibold text-slate-700 mb-3">
+                  {language === 'zh' ? '统计 (P50 / P95 / 标准差)' : 'Statistics (P50 / P95 / Std Dev)'}
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                  {['ttft', 'ttfb', 'latency', 'steadyTps', 'effectiveTps'].map((key) => {
+                    const m = result.aggregate[key]
+                    if (!m) return null
+                    const label = AGG_LABELS[key]?.[language] || key
+                    const unit = ['ttft', 'ttfb', 'latency'].includes(key) ? 'ms' : 'tok/s'
+                    return (
+                      <div key={key} className="flex items-center justify-between p-2 bg-slate-50 rounded">
+                        <span className="text-slate-600">{label}</span>
+                        <span className="text-slate-900 font-mono text-xs">
+                          P50 {formatAgg(m.p50, key)}{unit} · P95 {formatAgg(m.p95, key)}{unit} · σ {formatAgg(m.stdDev, key)}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="mt-3 text-xs text-slate-500">
+                  {language === 'zh' ? '成功率' : 'Success'}{(result.successRate ?? 100).toFixed(0)}% · {result.aggregate.ttft.samples} {language === 'zh' ? '轮' : 'runs'} ·{' '}
+                  {language === 'zh' ? 'token 来源' : 'token source'}: {result.tokenSource || 'unknown'}
+                </div>
               </div>
             )}
 
