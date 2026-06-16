@@ -9,6 +9,7 @@ import Footer from './components/Footer'
 import TestForm from './components/TestForm'
 import TestResult from './components/TestResult'
 import HistoryTable from './components/HistoryTable'
+import HistoryChart from './components/HistoryChart'
 import { ToastProvider, useToast, triggerToast } from './components/Toast'
 import { getProviderName, t } from './config/i18n'
 
@@ -394,6 +395,8 @@ function AppContent() {
           totalRuns={BENCHMARK_CONFIG.warmupCount + BENCHMARK_CONFIG.runCount}
           currentPhase={currentPhase}
         />
+
+        <HistoryChart history={filteredHistory} language={language} />
 
         <HistoryTable
           history={filteredHistory}
