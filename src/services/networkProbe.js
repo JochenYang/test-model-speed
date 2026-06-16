@@ -41,8 +41,14 @@ async function singleProbe(baseUrl) {
   const id = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS)
   const start = performance.now()
   try {
-    const r = await fetch(baseUrl, { method: 'OPTIONS', signal: controller.signal })
-    if (!r.ok && r.status !== 405) return null
+    // mode: 'no-cors' avoids the CORS preflight handshake (some providers,
+    // e.g. MiniMax, redirect preflight and the browser refuses to follow).
+    // Response is opaque (status 0) but timing is still valid for RTT.
+    await fetch(baseUrl, {
+      method: 'OPTIONS',
+      mode: 'no-cors',
+      signal: controller.signal,
+    })
     return performance.now() - start
   } catch {
     return null
