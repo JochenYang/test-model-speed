@@ -1,5 +1,6 @@
 import { callLLMApi } from './api.js'
 import { aggregateMetric } from './aggregate.js'
+import { probeNetwork } from './networkProbe.js'
 import { BENCHMARK_CONFIG } from '../config/benchmark.js'
 
 export class BenchmarkError extends Error {
@@ -26,6 +27,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 export async function runBenchmark(args) {
   const config = { ...BENCHMARK_CONFIG, ...(args.config || {}) }
   const { baseUrl, apiKey, model, prompt, apiOptions = {} } = args
+
+  const networkBaseline = await probeNetwork(baseUrl).catch(() => null)
 
   const samples = []
   const failedRuns = []
@@ -68,6 +71,7 @@ export async function runBenchmark(args) {
     successRate: samples.length / config.runCount,
     failedRuns,
     tokenSource: samples[samples.length - 1].tokenSource,
+    networkBaseline,
     config,
     benchmarkVersion: '2.0',
     timestamp: new Date().toISOString(),

@@ -22,17 +22,18 @@ describe('runBenchmark', () => {
       prompt: 'hi',
     })
 
-    expect(globalThis.fetch).toHaveBeenCalledTimes(4)
+    expect(globalThis.fetch).toHaveBeenCalledTimes(7)
     expect(r.aggregate.ttft.samples).toBe(3)
     expect(r.successRate).toBeGreaterThan(0)
     expect(r.failedRuns).toEqual([])
+    expect('networkBaseline' in r).toBe(true)
   })
 
   it('continues on per-run failure and reports successRate', async () => {
     let n = 0
     globalThis.fetch.mockImplementation(async () => {
       n++
-      if (n === 2) return { ok: false, status: 500, statusText: 'err', json: async () => ({}) }
+      if (n === 5) return { ok: false, status: 500, statusText: 'err', json: async () => ({}) }
       return { ok: true, body: makeSse(['ok', { usage: { completion_tokens: 5, prompt_tokens: 1 } }]) }
     })
 
@@ -46,6 +47,7 @@ describe('runBenchmark', () => {
 
     expect(r.successRate).toBeCloseTo(0.667, 2)
     expect(r.failedRuns.length).toBe(1)
+    expect('networkBaseline' in r).toBe(true)
   })
 
   it('throws BenchmarkError when all runs fail', async () => {
@@ -95,7 +97,7 @@ describe('runBenchmark — HTTP 401/403/404 immediate abort (S7)', () => {
     expect(err).toBeInstanceOf(BenchmarkError)
     expect(err.message).toBe('API Key 无效或模型无权访问')
     expect(err.details).toMatchObject({ status: 401, cause: 'http_error', run: 0 })
-    expect(globalThis.fetch).toHaveBeenCalledTimes(1)
+    expect(globalThis.fetch).toHaveBeenCalledTimes(4)
   })
 
   it('throws BenchmarkError immediately on HTTP 403 with auth message', async () => {
@@ -120,7 +122,7 @@ describe('runBenchmark — HTTP 401/403/404 immediate abort (S7)', () => {
     expect(err).toBeInstanceOf(BenchmarkError)
     expect(err.message).toBe('API Key 无效或模型无权访问')
     expect(err.details).toMatchObject({ status: 403, cause: 'http_error' })
-    expect(globalThis.fetch).toHaveBeenCalledTimes(1)
+    expect(globalThis.fetch).toHaveBeenCalledTimes(4)
   })
 
   it('throws BenchmarkError immediately on HTTP 404 with model-id message', async () => {
@@ -145,7 +147,7 @@ describe('runBenchmark — HTTP 401/403/404 immediate abort (S7)', () => {
     expect(err).toBeInstanceOf(BenchmarkError)
     expect(err.message).toBe('模型 ID 不存在，请检查 models.dev 是否已更新或输入是否正确')
     expect(err.details).toMatchObject({ status: 404, cause: 'http_error' })
-    expect(globalThis.fetch).toHaveBeenCalledTimes(1)
+    expect(globalThis.fetch).toHaveBeenCalledTimes(4)
   })
 
   it('does NOT abort on HTTP 500 — still goes through per-run failure path', async () => {
@@ -166,7 +168,7 @@ describe('runBenchmark — HTTP 401/403/404 immediate abort (S7)', () => {
       }),
     ).rejects.toThrow(/所有轮次失败/)
 
-    expect(globalThis.fetch).toHaveBeenCalledTimes(2)
+    expect(globalThis.fetch).toHaveBeenCalledTimes(5)
   })
 })
 
