@@ -231,6 +231,10 @@ function AppContent() {
           endpointPath,
           extraHeaders: parsedHeaders,
         },
+        onProgress: ({ phase, run }) => {
+          setCurrentPhase(phase)
+          setCurrentRun(run)
+        },
       })
 
       const { aggregate, successRate, failedRuns: runFailures, tokenSource } = benchmarkResult

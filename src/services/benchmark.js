@@ -22,23 +22,33 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
  * @param {string} args.model
  * @param {string} args.prompt
  * @param {object} [args.apiOptions]
+ * @param {(p: {phase:'warmup'|'measure', run:number, totalRuns:number, samples:number, failedRuns:number}) => void} [args.onProgress]
  * @returns {Promise<AggregateResult>}
  */
 export async function runBenchmark(args) {
   const config = { ...BENCHMARK_CONFIG, ...(args.config || {}) }
-  const { baseUrl, apiKey, model, prompt, apiOptions = {} } = args
+  const { baseUrl, apiKey, model, prompt, apiOptions = {}, onProgress } = args
+  const totalRuns = config.warmupCount + config.runCount
 
   const networkBaseline = await probeNetwork(baseUrl).catch(() => null)
 
   const samples = []
   const failedRuns = []
 
+  const progress = (phase, run) => {
+    if (typeof onProgress === 'function') {
+      onProgress({ phase, run, totalRuns, samples: samples.length, failedRuns: failedRuns.length })
+    }
+  }
+
   for (let i = 0; i < config.warmupCount; i++) {
+    progress('warmup', i + 1)
     try { await callLLMApi(baseUrl, apiKey, model, prompt, apiOptions) } catch { /* warmup failures ignored */ }
     await sleep(300)
   }
 
   for (let i = 0; i < config.runCount; i++) {
+    progress('measure', config.warmupCount + i + 1)
     try {
       const metrics = await callLLMApi(baseUrl, apiKey, model, prompt, apiOptions)
       samples.push(metrics)

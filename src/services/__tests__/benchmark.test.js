@@ -7,6 +7,31 @@ describe('runBenchmark', () => {
     globalThis.fetch = vi.fn()
   })
 
+  it('invokes onProgress for each warmup and measurement run', async () => {
+    // probeNetwork (3 fetches) + warmup (1) + measured (2) = 6 fetches, each
+    // needs a fresh ReadableStream (closed streams can't be re-read).
+    globalThis.fetch.mockImplementation(async () => ({
+      ok: true,
+      body: makeSse(['hello', { usage: { completion_tokens: 5, prompt_tokens: 1 } }]),
+    }))
+
+    const progress = []
+    await runBenchmark({
+      config: { ...BENCHMARK_CONFIG, runCount: 2, warmupCount: 1 },
+      baseUrl: 'https://example.com',
+      apiKey: 'k',
+      model: 'm',
+      prompt: 'hi',
+      onProgress: (p) => progress.push(p),
+    })
+
+    // warmup(1) + measured(2) = 3 progress events
+    expect(progress).toHaveLength(3)
+    expect(progress[0]).toMatchObject({ phase: 'warmup', run: 1, totalRuns: 3 })
+    expect(progress[1]).toMatchObject({ phase: 'measure', run: 2, totalRuns: 3 })
+    expect(progress[2]).toMatchObject({ phase: 'measure', run: 3, totalRuns: 3 })
+  })
+
   it('runs warmupCount + runCount calls and aggregates', async () => {
     globalThis.fetch.mockImplementation(async () => ({
       ok: true,
