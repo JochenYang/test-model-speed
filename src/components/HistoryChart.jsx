@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { METRICS, filterByRange, listSeries, buildChartData } from '../lib/historyChart'
+import { METRICS, filterByRange, listSeries, buildChartData, computeYDomain } from '../lib/historyChart'
 import { t } from '../config/i18n'
 import { Button } from './ui/button'
 
@@ -49,6 +49,7 @@ export default function HistoryChart({ history, language = 'zh' }) {
   )
   const data = useMemo(() => buildChartData(filtered, metricKey), [filtered, metricKey])
   const series = useMemo(() => listSeries(filtered), [filtered])
+  const yDomain = useMemo(() => computeYDomain(data), [data])
 
   const empty = !history || history.length === 0
   const tooFew = data.length < 1
@@ -107,7 +108,7 @@ export default function HistoryChart({ history, language = 'zh' }) {
                 stroke="#94a3b8"
                 fontSize={12}
               />
-              <YAxis stroke="#94a3b8" fontSize={12} />
+              <YAxis stroke="#94a3b8" fontSize={12} domain={yDomain} allowDataOverflow />
               <Tooltip
                 labelFormatter={formatTooltipTime}
                 contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: 6 }}
