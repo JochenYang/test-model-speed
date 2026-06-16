@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { providers, defaultPrompt } from './config/providers'
 import { BENCHMARK_CONFIG } from './config/benchmark'
-import { callLLMApi } from './services/api'
+import { runBenchmark } from './services/benchmark'
 import { getHistory, saveResult, deleteRecord, clearHistory, exportCSV, exportJSON, getLanguage, saveLanguage } from './services/storage'
 import Header from './components/Header'
 import Footer from './components/Footer'
@@ -10,36 +10,6 @@ import TestResult from './components/TestResult'
 import HistoryTable from './components/HistoryTable'
 import { ToastProvider, useToast, triggerToast } from './components/Toast'
 import { getProviderName } from './config/i18n'
-
-function average(values) {
-  if (!values.length) return 0
-  return values.reduce((sum, value) => sum + value, 0) / values.length
-}
-
-function percentile(values, p) {
-  if (!values.length) return 0
-  const sorted = [...values].sort((a, b) => a - b)
-  const rank = Math.ceil((p / 100) * sorted.length) - 1
-  const index = Math.min(sorted.length - 1, Math.max(0, rank))
-  return sorted[index]
-}
-
-function stdDev(values) {
-  if (values.length < 2) return 0
-  const avg = average(values)
-  const variance = average(values.map(v => (v - avg) ** 2))
-  return Math.sqrt(variance)
-}
-
-function buildMetricStats(results, key) {
-  const values = results.map(item => Number(item[key] || 0))
-  return {
-    avg: average(values),
-    p50: percentile(values, 50),
-    p95: percentile(values, 95),
-    std: stdDev(values),
-  }
-}
 
 function parseCustomHeaders(headersText) {
   if (!headersText || !headersText.trim()) return {}
@@ -61,14 +31,6 @@ function parseCustomHeaders(headersText) {
     sanitized[String(key).trim()] = String(value ?? '')
   }
   return sanitized
-}
-
-function summarizeTokenSource(results) {
-  const sources = new Set(results.map(item => item.tokenSource))
-  if (sources.size === 1) {
-    return sources.has('official') ? 'official' : 'estimated'
-  }
-  return 'mixed'
 }
 
 function AppContent() {
@@ -163,8 +125,6 @@ function AppContent() {
       ? getProviderName('custom', language)
       : getProviderName(selectedProvider.id, language)
 
-    const measuredResults = []
-    const runFailures = []
     const measuredRunCount = BENCHMARK_CONFIG.runCount
     const warmupRunCount = BENCHMARK_CONFIG.warmupCount
     const totalRuns = measuredRunCount + warmupRunCount
@@ -182,88 +142,61 @@ function AppContent() {
       return
     }
 
+    setCurrentPhase('warmup')
+    setCurrentRun(0)
+
     try {
-      for (let i = 0; i < totalRuns; i++) {
-        const isWarmupRun = i < warmupRunCount
-        setCurrentPhase(isWarmupRun ? 'warmup' : 'measure')
-        setCurrentRun(i + 1)
+      const benchmarkResult = await runBenchmark({
+        config: { ...BENCHMARK_CONFIG, runCount: measuredRunCount, warmupCount: warmupRunCount },
+        baseUrl,
+        apiKey,
+        model: modelId,
+        prompt,
+        apiOptions: {
+          maxTokens: BENCHMARK_CONFIG.maxTokens,
+          timeout: BENCHMARK_CONFIG.timeoutMs,
+          endpointPath,
+          extraHeaders: parsedHeaders,
+        },
+      })
 
-        try {
-          const result = await callLLMApi(baseUrl, apiKey, modelId, prompt, {
-            maxTokens: BENCHMARK_CONFIG.maxTokens,
-            timeout: BENCHMARK_CONFIG.timeoutMs,
-            endpointPath,
-            extraHeaders: parsedHeaders,
-          })
+      const { aggregate, successRate, failedRuns: runFailures, tokenSource } = benchmarkResult
+      const successRuns = Math.round(successRate * measuredRunCount)
+      const failedMeasuredRuns = measuredRunCount - successRuns
 
-          if (isWarmupRun) {
-            continue
-          }
-
-          const fullResult = {
-            ...result,
-            provider: providerName,
-            model: modelId,
-          }
-
-          measuredResults.push(fullResult)
-          setIntermediateResults([...measuredResults])
-
-          // Show latest measured run while executing
-          setTestResult(fullResult)
-        } catch (error) {
-          runFailures.push({
-            run: i + 1,
-            isWarmup: isWarmupRun,
-            message: error.message || 'Unknown error',
-          })
-        }
-      }
-
-      if (measuredResults.length === 0) {
-        const measuredFailure = runFailures.find(item => !item.isWarmup)
-        throw new Error(measuredFailure?.message || (language === 'zh' ? '测试失败，请重试' : 'Test failed, please try again'))
-      }
-
-      const ttftStats = buildMetricStats(measuredResults, 'ttft')
-      const latencyStats = buildMetricStats(measuredResults, 'latency')
-      const throughputStats = buildMetricStats(measuredResults, 'throughput')
-      const effectiveTpsStats = buildMetricStats(measuredResults, 'effectiveTps')
-      const outputTokensStats = buildMetricStats(measuredResults, 'outputTokens')
-
-      const failedMeasuredRuns = measuredRunCount - measuredResults.length
       const avgResult = {
-        ttft: Math.round(ttftStats.avg),
-        latency: Math.round(latencyStats.avg),
-        throughput: parseFloat(throughputStats.avg.toFixed(2)),
-        effectiveTps: parseFloat(effectiveTpsStats.avg.toFixed(2)),
-        outputTokens: Math.round(outputTokensStats.avg),
-        ttftP50: Math.round(ttftStats.p50),
-        ttftP95: Math.round(ttftStats.p95),
-        ttftStd: parseFloat(ttftStats.std.toFixed(2)),
-        latencyP50: Math.round(latencyStats.p50),
-        latencyP95: Math.round(latencyStats.p95),
-        latencyStd: parseFloat(latencyStats.std.toFixed(2)),
-        throughputP50: parseFloat(throughputStats.p50.toFixed(2)),
-        throughputP95: parseFloat(throughputStats.p95.toFixed(2)),
-        throughputStd: parseFloat(throughputStats.std.toFixed(2)),
-        effectiveTpsP50: parseFloat(effectiveTpsStats.p50.toFixed(2)),
-        effectiveTpsP95: parseFloat(effectiveTpsStats.p95.toFixed(2)),
-        effectiveTpsStd: parseFloat(effectiveTpsStats.std.toFixed(2)),
+        ttft: Math.round(aggregate.ttft.avg),
+        latency: Math.round(aggregate.latency.avg),
+        throughput: parseFloat(aggregate.steadyTps.avg.toFixed(2)),
+        effectiveTps: parseFloat(aggregate.effectiveTps.avg.toFixed(2)),
+        outputTokens: 0,
+        ttftP50: Math.round(aggregate.ttft.p50),
+        ttftP95: Math.round(aggregate.ttft.p95),
+        ttftStd: parseFloat(aggregate.ttft.stdDev.toFixed(2)),
+        latencyP50: Math.round(aggregate.latency.p50),
+        latencyP95: Math.round(aggregate.latency.p95),
+        latencyStd: parseFloat(aggregate.latency.stdDev.toFixed(2)),
+        throughputP50: parseFloat(aggregate.steadyTps.p50.toFixed(2)),
+        throughputP95: parseFloat(aggregate.steadyTps.p95.toFixed(2)),
+        throughputStd: parseFloat(aggregate.steadyTps.stdDev.toFixed(2)),
+        effectiveTpsP50: parseFloat(aggregate.effectiveTps.p50.toFixed(2)),
+        effectiveTpsP95: parseFloat(aggregate.effectiveTps.p95.toFixed(2)),
+        effectiveTpsStd: parseFloat(aggregate.effectiveTps.stdDev.toFixed(2)),
         provider: providerName,
         model: modelId,
         runCount: measuredRunCount,
         warmupCount: warmupRunCount,
-        successRuns: measuredResults.length,
+        successRuns,
         failedRuns: failedMeasuredRuns,
-        successRate: parseFloat(((measuredResults.length / measuredRunCount) * 100).toFixed(2)),
-        tokenSource: summarizeTokenSource(measuredResults),
+        successRate: parseFloat((successRate * 100).toFixed(2)),
+        tokenSource: tokenSource === 'tokenizer' ? 'estimated' : tokenSource,
         endpointPath,
-        failures: runFailures.filter(item => !item.isWarmup),
+        failures: runFailures,
+        aggregate,
         isAverage: true,
+        benchmarkVersion: benchmarkResult.benchmarkVersion,
       }
 
-      // Save average result to history
       saveResult(avgResult)
       setHistory(getHistory())
       setTestResult(avgResult)
@@ -275,7 +208,7 @@ function AppContent() {
         triggerToast(
           'error',
           language === 'zh' ? '测试完成（部分失败）' : 'Completed (partial failures)',
-          `${providerName} - ${modelId} (${measuredResults.length}/${measuredRunCount})`
+          `${providerName} - ${modelId} (${successRuns}/${measuredRunCount})`
         )
       } else {
         triggerToast(
