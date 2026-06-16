@@ -40,6 +40,12 @@ export async function runBenchmark(args) {
       const metrics = await callLLMApi(baseUrl, apiKey, model, prompt, apiOptions)
       samples.push(metrics)
     } catch (err) {
+      if (err.status === 401 || err.status === 403 || err.status === 404) {
+        const message = err.status === 404
+          ? '模型 ID 不存在，请检查 models.dev 是否已更新或输入是否正确'
+          : 'API Key 无效或模型无权访问'
+        throw new BenchmarkError(message, { status: err.status, cause: err.cause, run: i })
+      }
       failedRuns.push({ run: i, error: err.message, status: err.status, cause: err.cause })
     }
     await sleep(500)
