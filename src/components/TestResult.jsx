@@ -1,6 +1,14 @@
-import { Clock, Zap, FileText, XCircle, Loader2, Gauge, Activity, AlertTriangle } from 'lucide-react'
+import { Clock, Zap, FileText, XCircle, Loader2, Gauge, Activity, AlertTriangle, Wifi } from 'lucide-react'
 import { t } from '../config/i18n'
 import { Card, CardContent } from './ui/card'
+import { networkStatus } from '../services/networkProbe.js'
+
+const NETWORK_STATUS_STYLES = {
+  good: 'bg-green-50 text-green-700 border-green-200',
+  fair: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+  poor: 'bg-red-50 text-red-700 border-red-200',
+  unknown: 'bg-slate-50 text-slate-600 border-slate-200',
+}
 
 const METRIC_LABELS = {
   ttft: { zh: 'TTFT', en: 'TTFT' },
@@ -202,6 +210,17 @@ export default function TestResult({
               </div>
             )}
 
+            {result.networkBaseline ? (
+              <NetworkBadge
+                status={networkStatus(result.networkBaseline)}
+                rtt={result.networkBaseline.rtt}
+                jitter={result.networkBaseline.jitter}
+                language={language}
+              />
+            ) : (
+              <NetworkBadge language={language} status="unknown" />
+            )}
+
             {result.aggregate && (
               <div className="p-4 bg-white border border-slate-200 rounded-lg">
                 <h4 className="text-sm font-semibold text-slate-700 mb-3">
@@ -261,5 +280,22 @@ export default function TestResult({
         )}
       </CardContent>
     </Card>
+  )
+}
+
+function NetworkBadge({ status, rtt, jitter, language }) {
+  const style = NETWORK_STATUS_STYLES[status] || NETWORK_STATUS_STYLES.unknown
+  const statusLabel = t(`result.network.status.${status}`, language)
+  const text = status === 'unknown' || rtt == null
+    ? t('result.network.unknown', language)
+    : t('result.network.badge', language)
+        .replace('{status}', statusLabel)
+        .replace('{rtt}', rtt)
+        .replace('{jitter}', jitter)
+  return (
+    <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm font-medium ${style}`}>
+      <Wifi size={14} />
+      <span>{text}</span>
+    </div>
   )
 }

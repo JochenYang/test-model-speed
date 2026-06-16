@@ -200,6 +200,22 @@ export const translations = {
       zh: '平均 {count} 次测试结果',
       en: 'Average of {count} Runs',
     },
+    network: {
+      badge: {
+        zh: '网络 {status} · RTT {rtt}ms · σ {jitter}ms',
+        en: 'Network {status} · RTT {rtt}ms · σ {jitter}ms',
+      },
+      unknown: {
+        zh: '网络基线不可用',
+        en: 'Network baseline unavailable',
+      },
+      status: {
+        good: { zh: '良好', en: 'good' },
+        fair: { zh: '一般', en: 'fair' },
+        poor: { zh: '较差', en: 'poor' },
+        unknown: { zh: '未知', en: 'unknown' },
+      },
+    },
   },
 
   // History
