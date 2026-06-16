@@ -115,6 +115,34 @@ export const translations = {
         en: 'Please enter API URL and Model name',
       },
     },
+    showDeprecated: {
+      zh: '显示已下线模型',
+      en: 'Show deprecated models',
+    },
+    showBetaPreview: {
+      zh: '显示 Beta/Preview',
+      en: 'Show Beta/Preview',
+    },
+    freshnessLoading: {
+      zh: '模型数据: 加载中...',
+      en: 'Model data: loading...',
+    },
+    freshnessEmpty: {
+      zh: '模型数据: 未缓存',
+      en: 'Model data: not cached',
+    },
+    freshnessDays: {
+      zh: '模型数据更新于 {days} 天前',
+      en: 'Model data updated {days} days ago',
+    },
+    freshnessStale: {
+      zh: '模型数据已 {days} 天未更新，建议刷新',
+      en: 'Model data is {days} days old, suggest refresh',
+    },
+    modelsLoadFailed: {
+      zh: '加载模型列表失败，已使用内置列表',
+      en: 'Failed to load model list, using built-in fallback',
+    },
   },
 
   // Test Result

@@ -35,6 +35,10 @@ export default function TestForm({
   onTest,
   testStatus,
   language,
+  prefs = { showDeprecated: false, showBetaPreview: true },
+  onPrefsChange,
+  modelsCachedAt = null,
+  modelsLoading = false,
 }) {
   const [showApiKey, setShowApiKey] = useState(false)
   const [customModelInput, setCustomModelInput] = useState('')
@@ -44,8 +48,38 @@ export default function TestForm({
   const [useCustomModel, setUseCustomModel] = useState(false)
   const [saveApiKeyEnabled, setSaveApiKeyEnabled] = useState(true)
 
-  const isTesting = testStatus === 'testing'
-  const isCustomProvider = selectedProvider.id === 'custom'
+const isTesting = testStatus === 'testing'
+const isCustomProvider = selectedProvider.id === 'custom'
+
+function renderFreshnessLabel(cachedAt, loading, language) {
+  if (loading) {
+    return (
+      <span className="text-xs text-slate-400">
+        {t('form.freshnessLoading', language)}
+      </span>
+    )
+  }
+  if (!cachedAt) {
+    return (
+      <span className="text-xs text-slate-400">
+        {t('form.freshnessEmpty', language)}
+      </span>
+    )
+  }
+  const days = Math.floor((Date.now() - cachedAt) / (24 * 3600 * 1000))
+  const isStale = days >= 7
+  const text = isStale
+    ? t('form.freshnessStale', language).replace('{days}', String(days))
+    : t('form.freshnessDays', language).replace('{days}', String(days))
+  return (
+    <span
+      className={`text-xs ${isStale ? 'text-amber-600 font-medium' : 'text-slate-500'}`}
+      title={new Date(cachedAt).toISOString()}
+    >
+      {text}
+    </span>
+  )
+}
 
   // Load saved preferences
   useEffect(() => {
@@ -112,9 +146,12 @@ export default function TestForm({
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 mb-6">
-      <h2 className="text-lg font-semibold mb-4">
-        {language === 'zh' ? '测试配置' : 'Test Configuration'}
-      </h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold">
+          {language === 'zh' ? '测试配置' : 'Test Configuration'}
+        </h2>
+        {renderFreshnessLabel(modelsCachedAt, modelsLoading, language)}
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         {/* Provider Select using shadcn Select */}
@@ -285,6 +322,34 @@ export default function TestForm({
             {language === 'zh' ? '保存 API Key 到本地' : 'Save API Key to local'}
           </Label>
         </div>
+
+        {/* Model filter toggles (Phase 2 / spec S3.2) */}
+        {onPrefsChange && (
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <Checkbox
+                id="showBetaPreview"
+                checked={prefs.showBetaPreview !== false}
+                onCheckedChange={(checked) =>
+                  onPrefsChange({ ...prefs, showBetaPreview: checked === true })
+                }
+                disabled={isTesting}
+              />
+              <span>{t('form.showBetaPreview', language)}</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <Checkbox
+                id="showDeprecated"
+                checked={prefs.showDeprecated === true}
+                onCheckedChange={(checked) =>
+                  onPrefsChange({ ...prefs, showDeprecated: checked === true })
+                }
+                disabled={isTesting}
+              />
+              <span>{t('form.showDeprecated', language)}</span>
+            </label>
+          </div>
+        )}
       </div>
 
       {/* Custom Prompt */}

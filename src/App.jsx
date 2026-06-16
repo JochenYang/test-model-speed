@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { providers, defaultPrompt } from './config/providers'
+import { providers as staticProviders, defaultPrompt } from './config/providers'
 import { BENCHMARK_CONFIG } from './config/benchmark'
 import { runBenchmark } from './services/benchmark'
+import { fetchMergedModels, getModelsCacheTimestamp } from './services/modelsService'
 import { getHistory, saveResult, deleteRecord, clearHistory, exportCSV, exportJSON, getLanguage, saveLanguage } from './services/storage'
 import Header from './components/Header'
 import Footer from './components/Footer'
@@ -9,7 +10,29 @@ import TestForm from './components/TestForm'
 import TestResult from './components/TestResult'
 import HistoryTable from './components/HistoryTable'
 import { ToastProvider, useToast, triggerToast } from './components/Toast'
-import { getProviderName } from './config/i18n'
+import { getProviderName, t } from './config/i18n'
+
+const PREFS_STORAGE_KEY = 'models.dev.prefs.v1'
+
+function loadPrefs() {
+  try {
+    const raw = localStorage.getItem(PREFS_STORAGE_KEY)
+    if (!raw) return { showDeprecated: false, showBetaPreview: true }
+    const parsed = JSON.parse(raw)
+    return {
+      showDeprecated: Boolean(parsed.showDeprecated),
+      showBetaPreview: parsed.showBetaPreview !== false,
+    }
+  } catch {
+    return { showDeprecated: false, showBetaPreview: true }
+  }
+}
+
+function savePrefs(prefs) {
+  try {
+    localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify(prefs))
+  } catch { /* quota */ }
+}
 
 function parseCustomHeaders(headersText) {
   if (!headersText || !headersText.trim()) return {}
@@ -34,8 +57,11 @@ function parseCustomHeaders(headersText) {
 }
 
 function AppContent() {
-  const [selectedProvider, setSelectedProvider] = useState(providers[0])
-  const [selectedModel, setSelectedModel] = useState(providers[0].models[0])
+  const [providers, setProviders] = useState(staticProviders)
+  const [selectedProvider, setSelectedProvider] = useState(staticProviders[0])
+  const [selectedModel, setSelectedModel] = useState(
+    staticProviders[0].models[0] || { id: '', name: '' },
+  )
   const [apiKey, setApiKey] = useState('')
   const [customPrompt, setCustomPrompt] = useState('')
   const [testStatus, setTestStatus] = useState('ready')
@@ -47,6 +73,9 @@ function AppContent() {
   const [intermediateResults, setIntermediateResults] = useState([])
   const [currentRun, setCurrentRun] = useState(0)
   const [currentPhase, setCurrentPhase] = useState('warmup')
+  const [prefs, setPrefs] = useState({ showDeprecated: false, showBetaPreview: true })
+  const [modelsCachedAt, setModelsCachedAt] = useState(() => getModelsCacheTimestamp())
+  const [modelsLoading, setModelsLoading] = useState(true)
 
   const { showConfirm } = useToast()
 
@@ -57,7 +86,51 @@ function AppContent() {
     // Load saved language
     const savedLanguage = getLanguage()
     setLanguage(savedLanguage)
+
+    // Load filter prefs
+    setPrefs(loadPrefs())
   }, [])
+
+  // Reload model catalog when prefs change (cheap: re-apply filters locally).
+  useEffect(() => {
+    let cancelled = false
+    setModelsLoading(true)
+    fetchMergedModels({ prefs })
+      .then((merged) => {
+        if (cancelled) return
+        setProviders(merged)
+        setModelsCachedAt(getModelsCacheTimestamp())
+
+        // Re-anchor selected model: keep the same provider+model id if still present.
+        setSelectedProvider((prev) => {
+          const next = merged.find((p) => p.id === prev?.id) || merged[0]
+          if (next?.id !== prev?.id) {
+            setSelectedModel(next?.models?.[0] || { id: '', name: '' })
+          } else if (prev?.models?.[0]?.id !== next?.models?.[0]?.id) {
+            setSelectedModel(next?.models?.[0] || { id: '', name: '' })
+          }
+          return next
+        })
+      })
+      .catch((err) => {
+        if (cancelled) return
+        console.error('Failed to load models:', err)
+        triggerToast(
+          'error',
+          language === 'zh' ? '加载模型失败' : 'Load Models Failed',
+          t('form.modelsLoadFailed', language),
+        )
+      })
+      .finally(() => {
+        if (!cancelled) setModelsLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [prefs, language])
+
+  // Persist prefs on change
+  useEffect(() => {
+    savePrefs(prefs)
+  }, [prefs])
 
   // Handle language change
   const handleLanguageChange = (lang) => {
@@ -299,6 +372,10 @@ function AppContent() {
           onTest={handleTest}
           testStatus={testStatus}
           language={language}
+          prefs={prefs}
+          onPrefsChange={setPrefs}
+          modelsCachedAt={modelsCachedAt}
+          modelsLoading={modelsLoading}
         />
 
         <TestResult
