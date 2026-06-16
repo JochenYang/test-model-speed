@@ -1,7 +1,10 @@
 /**
  * LLM API service for speed testing
- * Uses streaming to accurately measure TTFT, throughput, and effective TPS
+ * Uses streaming to accurately measure TTFT, throughput, and effective TPS.
+ * v2: TTFT/TPS strict semantics, tokenSource from official/tokenizer/estimated.
  */
+
+import { estimateTokensWithSource } from './tokenEstimate.js'
 
 const isProd = import.meta.env.PROD
 
@@ -16,56 +19,36 @@ function normalizeEndpointPath(path) {
 
 function sanitizeHeaders(input) {
   if (!input || typeof input !== 'object') return {}
-
   const blocked = new Set(['authorization', 'content-type', 'content-length', 'host'])
   const output = {}
-
   for (const [rawKey, rawValue] of Object.entries(input)) {
     const key = String(rawKey || '').trim()
     if (!key) continue
     if (blocked.has(key.toLowerCase())) continue
     output[key] = String(rawValue ?? '')
   }
-
   return output
 }
 
 /**
- * Estimate tokens using improved algorithm for mixed Chinese/English content
- * @param {string} text - Generated text
- * @returns {number} Estimated token count
- */
-function estimateTokens(text) {
-  if (!text || text.length === 0) return 1
-
-  // Count Chinese characters (each Chinese character ~= 0.55 tokens)
-  const chineseChars = (text.match(/[\u4e00-\u9fa5]+/g) || []).join('').length
-
-  // Remove Chinese characters and count English words
-  const textWithoutChinese = text.replace(/[\u4e00-\u9fa5]/g, '')
-  const englishWords = textWithoutChinese.split(/\s+/).filter(w => w.length > 0)
-
-  // Count punctuation (each punctuation mark ~= 0.3 tokens)
-  const punctuationCount = (text.match(/[\p{P}]/gu) || []).length
-
-  // Calculation: Chinese * 0.55 + English words * 1.3 + Punctuation * 0.3
-  return Math.max(1, Math.ceil(
-    chineseChars * 0.55 +
-    englishWords.length * 1.3 +
-    punctuationCount * 0.3
-  ))
-}
-
-/**
- * Call LLM API with streaming and measure performance
- * @param {string} baseUrl - Provider base URL
- * @param {string} apiKey - API key
- * @param {string} model - Model name
- * @param {string} prompt - User prompt
- * @param {Object} options - Options object
- * @param {number} options.maxTokens - Maximum tokens to generate (default: 2048)
- * @param {number} options.timeout - Request timeout in milliseconds (default: 120000)
- * @returns {Promise<{ttft: number, latency: number, throughput: number, effectiveTps: number, outputTokens: number}>}
+ * Call LLM API once with streaming. Returns run metrics.
+ * @returns {Promise<RunMetrics>}
+ *
+ * RunMetrics shape (JSDoc):
+ * {
+ *   ttfb: number,              // ms, network only
+ *   ttft: number,              // ms, model-only (firstTokenTime - firstByteTime)
+ *   ttftOverWallClock: number, // ms, perceived
+ *   latency: number,           // ms
+ *   promptTokens: number,
+ *   completionTokens: number,
+ *   totalTokens: number,
+ *   steadyTps: number,
+ *   effectiveTps: number,
+ *   chunkCount: number,
+ *   chunkIntervals: number[],
+ *   tokenSource: 'official'|'tokenizer'|'estimated',
+ * }
  */
 export async function callLLMApi(baseUrl, apiKey, model, prompt, options = {}) {
   const {
@@ -78,25 +61,18 @@ export async function callLLMApi(baseUrl, apiKey, model, prompt, options = {}) {
   const normalizedPath = normalizeEndpointPath(endpointPath)
   const normalizedHeaders = sanitizeHeaders(extraHeaders)
   const normalizedBaseUrl = String(baseUrl || '').replace(/\/+$/, '')
-
-  // Production: use Vercel proxy to avoid CORS
-  // Development: direct call
   const url = isProd ? '/api/proxy' : `${normalizedBaseUrl}${normalizedPath}`
 
-  // Build request body
   const requestBase = {
-    model: model,
+    model,
     messages: [{ role: 'user', content: prompt }],
     stream: true,
     max_tokens: maxTokens,
-    stream_options: { include_usage: true }
+    stream_options: { include_usage: true },
   }
-
   const requestBody = isProd
     ? { ...requestBase, baseUrl: normalizedBaseUrl, apiKey, endpointPath: normalizedPath, extraHeaders: normalizedHeaders }
     : requestBase
-
-  // Build headers
   const headers = isProd
     ? { 'Content-Type': 'application/json' }
     : {
@@ -105,50 +81,57 @@ export async function callLLMApi(baseUrl, apiKey, model, prompt, options = {}) {
         ...normalizedHeaders,
       }
 
-  const startTime = performance.now()
-  let ttft = null
-  let firstTokenTime = null
-  let finalTokens = 0
-  let tokenSource = 'estimated'
-
-  // Set up AbortController for timeout
+  const requestStart = performance.now()
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), timeout)
 
-  let streamResponse
+  let response
   try {
-    streamResponse = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(requestBody),
-      signal: controller.signal,
-    })
+    response = await fetch(url, { method: 'POST', headers, body: JSON.stringify(requestBody), signal: controller.signal })
   } catch (error) {
     clearTimeout(timeoutId)
     if (error.name === 'AbortError') {
-      throw new Error(`Request timeout after ${timeout / 1000}s`)
+      const e = new Error(`Request timeout after ${timeout / 1000}s`)
+      e.cause = 'timeout'
+      throw e
     }
     throw error
   }
-
   clearTimeout(timeoutId)
 
-  if (!streamResponse.ok) {
-    const error = await streamResponse.json().catch(() => ({}))
-    throw new Error(error.error || error.message || `HTTP ${streamResponse.status}: ${streamResponse.statusText}`)
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({}))
+    const err = new Error(errorBody.error || errorBody.message || `HTTP ${response.status}: ${response.statusText}`)
+    err.status = response.status
+    err.cause = 'http_error'
+    throw err
   }
 
-  const reader = streamResponse.body.getReader()
+  const firstByteTime = performance.now()
+  const ttfb = firstByteTime - requestStart
+
+  const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
   let generatedText = ''
 
+  let ttft = null
+  let firstTokenTime = null
+  let lastChunkTime = firstByteTime
+  let chunkCount = 0
+  const chunkIntervals = []
+
+  let promptTokens = 0
+  let completionTokens = 0
+  let tokenSource = 'estimated'
+
   while (true) {
     const { done, value } = await reader.read()
-
-    if (done) {
-      break
-    }
+    if (done) break
+    const now = performance.now()
+    chunkIntervals.push(now - lastChunkTime)
+    chunkCount++
+    lastChunkTime = now
 
     buffer += decoder.decode(value, { stream: true })
     const lines = buffer.split('\n')
@@ -156,81 +139,67 @@ export async function callLLMApi(baseUrl, apiKey, model, prompt, options = {}) {
 
     for (const line of lines) {
       const trimmed = line.trim()
+      if (!trimmed || trimmed === 'data: [DONE]') continue
+      if (!trimmed.startsWith('data: ')) continue
+      const jsonStr = trimmed.slice(6)
+      try {
+        const data = JSON.parse(jsonStr)
 
-      if (!trimmed || trimmed === 'data: [DONE]') {
-        continue
-      }
-
-      if (trimmed.startsWith('data: ')) {
-        const jsonStr = trimmed.slice(6)
-
-        try {
-          const data = JSON.parse(jsonStr)
-
-          // Try to get token usage from the stream
-          // Some providers (e.g., MiniMax) send usage in a separate chunk with empty choices
-          if (data.usage && Number.isFinite(data.usage.completion_tokens)) {
-            finalTokens = data.usage.completion_tokens
+        if (data?.usage) {
+          if (Number.isFinite(data.usage.prompt_tokens)) promptTokens = data.usage.prompt_tokens
+          if (Number.isFinite(data.usage.completion_tokens)) {
+            completionTokens = data.usage.completion_tokens
             tokenSource = 'official'
           }
-
-          let content = data.choices?.[0]?.delta?.content
-
-          if (!content) {
-            content = data.choices?.[0]?.content
-          }
-
-          if (!content) {
-            content = data.content
-          }
-
-          if (content) {
-            generatedText += content
-            const now = performance.now()
-
-            if (ttft === null) {
-              ttft = now - startTime
-              firstTokenTime = now
-            }
-          }
-        } catch (e) {
-          // Ignore parse errors
         }
+
+        const hasContent =
+          data?.choices?.[0]?.delta?.content !== undefined
+          || data?.choices?.[0]?.content !== undefined
+        if (hasContent && ttft === null) {
+          ttft = performance.now() - firstByteTime
+          firstTokenTime = performance.now()
+        }
+        const content =
+          data?.choices?.[0]?.delta?.content
+          ?? data?.choices?.[0]?.content
+          ?? data?.content
+        if (content) generatedText += content
+      } catch {
+        // ignore parse errors
       }
     }
   }
 
   const endTime = performance.now()
-  const totalLatency = endTime - startTime
+  const latency = endTime - requestStart
 
-  // Improved token estimation if usage is not provided
-  if (finalTokens === 0) {
-    finalTokens = estimateTokens(generatedText)
-    tokenSource = 'estimated'
+  if (tokenSource !== 'official' && generatedText) {
+    const est = estimateTokensWithSource(generatedText)
+    completionTokens = est.tokens
+    tokenSource = est.source
   }
 
-  // Calculate steady throughput
-  // If streaming time is too short (e.g. < 50ms), it's likely buffered or too fast to measure accurately
-  const streamingTime = firstTokenTime ? (endTime - firstTokenTime) : 0
-  let throughput = 0
-  if (streamingTime > 50 && finalTokens > 1) {
-    throughput = (finalTokens - 1) / (streamingTime / 1000)
-  } else if (finalTokens > 0 && totalLatency > 0) {
-    // Fallback to effective TPS if streaming time is too small
-    throughput = finalTokens / (totalLatency / 1000)
-  }
-
-  // Calculate effective TPS
-  const effectiveTps = finalTokens > 0 && totalLatency > 0
-    ? (finalTokens / (totalLatency / 1000))
-    : 0
+  const streamingTime = firstTokenTime ? lastChunkTime - firstTokenTime : 0
+  const steadyTps = streamingTime > 0 ? completionTokens / (streamingTime / 1000) : 0
+  const effectiveTps = latency > 0 ? completionTokens / (latency / 1000) : 0
 
   return {
-    ttft: ttft !== null ? Math.round(ttft) : Math.round(totalLatency),
-    latency: Math.round(totalLatency),
-    throughput: parseFloat(throughput.toFixed(2)),
-    effectiveTps: parseFloat(effectiveTps.toFixed(2)),
-    outputTokens: finalTokens,
+    ttfb: Math.round(ttfb),
+    ttft: ttft !== null ? Math.round(ttft) : Math.round(latency),
+    ttftOverWallClock: firstTokenTime ? Math.round(firstTokenTime - requestStart) : Math.round(latency),
+    latency: Math.round(latency),
+    promptTokens,
+    completionTokens,
+    totalTokens: promptTokens + completionTokens,
+    steadyTps: round2(steadyTps),
+    effectiveTps: round2(effectiveTps),
+    chunkCount,
+    chunkIntervals,
     tokenSource,
   }
+}
+
+function round2(n) {
+  return Math.round(n * 100) / 100
 }
