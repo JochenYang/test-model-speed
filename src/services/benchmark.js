@@ -44,7 +44,7 @@ export async function runBenchmark(args) {
   for (let i = 0; i < config.warmupCount; i++) {
     progress('warmup', i + 1)
     try { await callLLMApi(baseUrl, apiKey, model, prompt, apiOptions) } catch { /* warmup failures ignored */ }
-    await sleep(300)
+    await sleep(100)
   }
 
   for (let i = 0; i < config.runCount; i++) {
@@ -61,7 +61,7 @@ export async function runBenchmark(args) {
       }
       failedRuns.push({ run: i, error: err.message, status: err.status, cause: err.cause })
     }
-    await sleep(500)
+    await sleep(200)
   }
 
   if (samples.length === 0) {
