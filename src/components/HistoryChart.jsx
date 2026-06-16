@@ -108,7 +108,7 @@ export default function HistoryChart({ history, language = 'zh' }) {
                 stroke="#94a3b8"
                 fontSize={12}
               />
-              <YAxis stroke="#94a3b8" fontSize={12} domain={yDomain} allowDataOverflow />
+              <YAxis stroke="#94a3b8" fontSize={12} domain={yDomain} />
               <Tooltip
                 labelFormatter={formatTooltipTime}
                 contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: 6 }}

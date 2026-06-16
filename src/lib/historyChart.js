@@ -56,22 +56,18 @@ export function buildChartData(history, metric) {
 }
 
 /**
- * Y-axis domain that resists outlier compression.
+ * Y-axis domain that keeps every data point within view.
  *
- * recharts' default YAxis domain is [dataMin, dataMax], which means a single
- * extreme outlier (e.g. an early misconfigured run reporting 1100 tok/s next
- * to steady ~12 tok/s runs) drags the upper bound up and squashes normal
- * values against the X axis.
+ * Earlier IQR-based approach failed when the dataset is genuinely
+ * wide-spread (e.g. TTFT bouncing between ~1500ms and ~14000ms across
+ * runs): Q3 + 1.5*IQR exceeded the actual max and no cap happened.
  *
- * Algorithm:
- *  1. Collect all numeric values across every series and timestamp.
- *  2. IQR fence: if Q3 + 1.5*IQR < max, cap at the fence (Tukey's rule).
- *  3. Small-sample safety net: if max/median > 20 (Q3 itself is the outlier
- *     when n is tiny), cap at median × 10. Keeps 3-point charts usable.
- *  4. Pad 10% on both ends; clamp min to 0 (latency / TPS never negative).
+ * This implementation uses P5 / P95 to define the body of the range and
+ * guarantees that the absolute min and max are inside the domain with
+ * 10% padding, so no point is ever clipped off the chart.
  *
- * Pass the result to <YAxis domain={...} allowDataOverflow /> so recharts
- * honours the cap instead of auto-expanding to fit the outlier.
+ * Pair with `<YAxis domain={...} />` (allowDataOverflow defaults to false
+ * so recharts auto-fills any leftover room).
  *
  * @param {Array<object>} data - wide-format rows from buildChartData
  * @returns {[number, number]}
@@ -89,25 +85,15 @@ export function computeYDomain(data) {
   const sorted = [...values].sort((a, b) => a - b)
   const min = sorted[0]
   const max = sorted[sorted.length - 1]
-  const median = sorted[Math.floor(sorted.length / 2)]
 
-  let domainMax = max
-  if (sorted.length >= 4) {
-    const q1 = sorted[Math.floor(sorted.length * 0.25)]
-    const q3 = sorted[Math.floor(sorted.length * 0.75)]
-    const iqr = q3 - q1
-    if (iqr > 0) {
-      const upperFence = q3 + 1.5 * iqr
-      if (max > upperFence) domainMax = upperFence
-    }
-  }
-  // Small-sample safety net (Q3 == outlier when n is tiny, IQR is meaningless).
-  if (median > 0 && domainMax / median > 20) {
-    domainMax = median * 10
-  }
+  // P5 / P95 with absolute-min / absolute-max fallback.
+  // The fallback ensures the extreme points stay inside the axis even when
+  // P5/P95 would push them out (e.g. n=3 where the only "low" point is also
+  // the absolute min).
+  const p5 = sorted[Math.floor(sorted.length * 0.05)] ?? min
+  const p95 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))] ?? max
 
-  const span = domainMax - Math.max(0, min)
-  const pad = span * 0.1 || 1
-  const domainMin = Math.max(0, min - pad)
-  return [domainMin, domainMax + pad]
+  const domainMin = Math.max(0, Math.min(p5 * 0.9, min * 0.9))
+  const domainMax = Math.max(p95 * 1.1, max * 1.1)
+  return [domainMin, domainMax]
 }

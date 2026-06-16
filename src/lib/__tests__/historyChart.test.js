@@ -112,52 +112,47 @@ describe('computeYDomain', () => {
     expect(computeYDomain([{ timestamp: 1 }])).toEqual([0, 1])
   })
 
-  it('pads evenly when there are too few points for IQR (3-point case)', () => {
-    // The reported bug: MiniMax-M3 around 12 tok/s, plus one legacy outlier
-    // at ~1100. With n=3, IQR is meaningless; the small-sample safety net
-    // caps at median × 10 instead of letting 1100 squash everything to 0.
+  it('keeps both ends inside the axis with 10% padding (auto-fit)', () => {
+    // Reported case: TTFT values bouncing 1500~14000ms. The P5/P95 fallback
+    // guarantees min and max both land inside the domain so no point is
+    // clipped off the chart.
+    const data = [
+      row(1, { A: 1500 }),
+      row(2, { A: 1800 }),
+      row(3, { A: 2000 }),
+      row(4, { A: 2500 }),
+      row(5, { A: 12899 }),
+      row(6, { A: 13000 }),
+      row(7, { A: 13500 }),
+      row(8, { A: 14000 }),
+    ]
+    const [lo, hi] = computeYDomain(data)
+    expect(lo).toBeLessThan(1500)        // min is inside (with padding)
+    expect(lo).toBeGreaterThanOrEqual(0)
+    expect(hi).toBeGreaterThan(14000)    // max is inside (with padding)
+    expect(hi).toBeLessThan(20000)
+  })
+
+  it('handles 3-point wide-spread data without clipping', () => {
+    // The legacy Steady TPS case: [12, 12.73, 1100]
     const data = [
       row(1, { 'A': 12, 'B': 12.73 }),
       row(2, { 'A': 1100 }),
     ]
     const [lo, hi] = computeYDomain(data)
-    expect(hi).toBeLessThan(200)         // not 1210
-    expect(hi).toBeGreaterThan(120)      // but covers the 1100 order of magnitude
-    expect(lo).toBeLessThan(15)          // sits near the low values, not 0
+    expect(lo).toBeLessThan(13)          // low values fit
+    expect(hi).toBeGreaterThan(1100)     // 1100 fits
+  })
+
+  it('handles uniform data without crashing', () => {
+    const data = [row(1, { A: 50, B: 50 }), row(2, { A: 50 })]
+    const [lo, hi] = computeYDomain(data)
     expect(lo).toBeGreaterThanOrEqual(0)
+    expect(hi).toBeGreaterThan(50)
   })
 
-  it('uses max when no outlier is present', () => {
-    const data = [
-      row(1, { A: 30, B: 40 }),
-      row(2, { A: 50, B: 60 }),
-      row(3, { A: 35, B: 55 }),
-    ]
-    const [, hi] = computeYDomain(data)
-    expect(hi).toBeGreaterThanOrEqual(60)
-    expect(hi).toBeLessThan(80)
-  })
-
-  it('caps at IQR fence when a real outlier exists (n >= 4)', () => {
-    // 5 normal points at ~30 + 1 outlier at 1000
-    const data = [
-      row(1, { A: 28 }),
-      row(2, { A: 30 }),
-      row(3, { A: 31 }),
-      row(4, { A: 32 }),
-      row(5, { A: 33 }),
-      row(6, { A: 1000 }),
-    ]
-    const [, hi] = computeYDomain(data)
-    expect(hi).toBeLessThan(80)          // outlier excluded
-    expect(hi).toBeGreaterThan(33)
-  })
-
-  it('never goes negative (clamp at 0)', () => {
-    const data = [
-      row(1, { A: 5, B: 10 }),
-      row(2, { A: 8, B: 12 }),
-    ]
+  it('never goes negative', () => {
+    const data = [row(1, { A: 5, B: 10 }), row(2, { A: 8, B: 12 })]
     const [lo] = computeYDomain(data)
     expect(lo).toBeGreaterThanOrEqual(0)
   })
