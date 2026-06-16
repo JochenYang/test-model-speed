@@ -6,11 +6,11 @@
  *   freshness and origin load.
  * - stale-while-revalidate=43200 (12h) lets the next request after expiry
  *   serve stale while fetching new data in the background.
- * - CF-specific cache directives piggyback on Vercel's edge network.
+ * - Vercel's CDN honors the Cache-Control header (no Cloudflare-specific
+ *   `cf` directive needed; that broke Edge runtime deployment).
  */
 
 export const runtime = 'edge'
-export const config = { regions: ['hnd1', 'sin1'] }
 
 const MODELS_DEV_API = 'https://models.dev/api.json'
 const CACHE_HEADER = 'public, s-maxage=86400, stale-while-revalidate=43200'
@@ -19,7 +19,6 @@ export async function GET() {
   try {
     const upstream = await fetch(MODELS_DEV_API, {
       headers: { 'User-Agent': 'model-speed-tester' },
-      cf: { cacheTtl: 86400, cacheEverything: true },
     })
     if (!upstream.ok) {
       return new Response(JSON.stringify({ error: 'upstream error' }), {
