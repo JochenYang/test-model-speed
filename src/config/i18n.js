@@ -244,6 +244,14 @@ export const translations = {
       zh: '确定要清空所有历史记录吗？',
       en: 'Are you sure you want to clear all history?',
     },
+    loadMore: {
+      zh: '加载更多',
+      en: 'Load more',
+    },
+    showing: {
+      zh: '显示 {shown} / {total}',
+      en: 'Showing {shown} of {total}',
+    },
     columns: {
       time: {
         zh: '时间',
@@ -281,6 +289,33 @@ export const translations = {
         zh: '操作',
         en: 'Action',
       },
+    },
+  },
+
+  // Chart (history trend)
+  chart: {
+    title: {
+      zh: '性能趋势',
+      en: 'Performance Trend',
+    },
+    empty: {
+      zh: '暂无测试数据',
+      en: 'No test data yet',
+    },
+    tooFew: {
+      zh: '所选范围内数据不足',
+      en: 'Not enough data in selected range',
+    },
+    ranges: {
+      last7d: { zh: '最近 7 天', en: 'Last 7d' },
+      last30d: { zh: '最近 30 天', en: 'Last 30d' },
+      all: { zh: '全部', en: 'All' },
+    },
+    metrics: {
+      ttft: { zh: 'TTFT (ms)', en: 'TTFT (ms)' },
+      latency: { zh: '总耗时 (ms)', en: 'Latency (ms)' },
+      throughput: { zh: '稳定吞吐 (tok/s)', en: 'Steady TPS' },
+      effectiveTps: { zh: '有效吞吐 (tok/s)', en: 'Effective TPS' },
     },
   },
 

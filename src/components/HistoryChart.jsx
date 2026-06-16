@@ -10,12 +10,13 @@ import {
   YAxis,
 } from 'recharts'
 import { METRICS, filterByRange, listSeries, buildChartData } from '../lib/historyChart'
+import { t } from '../config/i18n'
 import { Button } from './ui/button'
 
 const RANGES = [
-  { key: '7d', label: { zh: '最近 7 天', en: 'Last 7d' } },
-  { key: '30d', label: { zh: '最近 30 天', en: 'Last 30d' } },
-  { key: 'all', label: { zh: '全部', en: 'All' } },
+  { key: '7d', i18nKey: 'chart.ranges.last7d' },
+  { key: '30d', i18nKey: 'chart.ranges.last30d' },
+  { key: 'all', i18nKey: 'chart.ranges.all' },
 ]
 
 // Stable color palette per series index (deterministic across renders).
@@ -42,8 +43,6 @@ export default function HistoryChart({ history, language = 'zh' }) {
   const [metricKey, setMetricKey] = useState('ttft')
   const [rangeKey, setRangeKey] = useState('30d')
 
-  const metric = METRICS.find((m) => m.key === metricKey) ?? METRICS[0]
-
   const filtered = useMemo(
     () => filterByRange(history, rangeKey),
     [history, rangeKey],
@@ -57,9 +56,7 @@ export default function HistoryChart({ history, language = 'zh' }) {
   return (
     <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 mb-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-        <h2 className="text-lg font-semibold">
-          {language === 'zh' ? '性能趋势' : 'Performance Trend'}
-        </h2>
+        <h2 className="text-lg font-semibold">{t('chart.title', language)}</h2>
 
         <div className="flex flex-wrap items-center gap-2">
           {/* Metric selector */}
@@ -71,7 +68,7 @@ export default function HistoryChart({ history, language = 'zh' }) {
                 variant={m.key === metricKey ? 'default' : 'outline'}
                 onClick={() => setMetricKey(m.key)}
               >
-                {m.label[language] ?? m.label.zh}
+                {t(`chart.metrics.${m.key}`, language)}
               </Button>
             ))}
           </div>
@@ -85,7 +82,7 @@ export default function HistoryChart({ history, language = 'zh' }) {
                 variant={r.key === rangeKey ? 'default' : 'outline'}
                 onClick={() => setRangeKey(r.key)}
               >
-                {r.label[language] ?? r.label.zh}
+                {t(r.i18nKey, language)}
               </Button>
             ))}
           </div>
@@ -94,9 +91,7 @@ export default function HistoryChart({ history, language = 'zh' }) {
 
       {empty || tooFew ? (
         <div className="text-center py-12 text-slate-400">
-          {empty
-            ? (language === 'zh' ? '暂无测试数据' : 'No test data yet')
-            : (language === 'zh' ? '所选范围内数据不足' : 'Not enough data in selected range')}
+          {empty ? t('chart.empty', language) : t('chart.tooFew', language)}
         </div>
       ) : (
         <div style={{ width: '100%', height: 320 }}>

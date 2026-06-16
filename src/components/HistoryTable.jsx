@@ -1,4 +1,5 @@
-import { Search, Trash2, FileJson, Trash } from 'lucide-react'
+import { useState } from 'react'
+import { Search, Trash2, FileJson, Trash, ChevronDown } from 'lucide-react'
 import { t } from '../config/i18n'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
@@ -11,6 +12,8 @@ import {
   TableRow,
 } from './ui/table'
 
+const PAGE_SIZE = 20
+
 export default function HistoryTable({
   history,
   searchQuery,
@@ -20,6 +23,10 @@ export default function HistoryTable({
   onExport,
   language,
 }) {
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  const showing = history.slice(0, visibleCount)
+  const hasMore = visibleCount < history.length
+
   return (
     <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
@@ -76,55 +83,75 @@ export default function HistoryTable({
           {t('history.noHistory', language)}
         </div>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{t('history.columns.time', language)}</TableHead>
-              <TableHead>{t('history.columns.provider', language)}</TableHead>
-              <TableHead className="min-w-[120px]">{t('history.columns.model', language)}</TableHead>
-              <TableHead className="text-right whitespace-nowrap">{t('history.columns.ttft', language)}</TableHead>
-              <TableHead className="text-right whitespace-nowrap">{t('history.columns.latency', language)}</TableHead>
-              <TableHead className="text-right whitespace-nowrap">{t('history.columns.steadyTps', language)}</TableHead>
-              <TableHead className="text-right whitespace-nowrap">{t('history.columns.effectiveTps', language)}</TableHead>
-              <TableHead className="text-right whitespace-nowrap">{t('history.columns.tokens', language)}</TableHead>
-              <TableHead className="text-center">{t('history.columns.action', language)}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {history.map((item) => (
-              <TableRow key={item.id}>
-                <TableCell className="text-slate-600 whitespace-nowrap">
-                  {new Date(item.timestamp).toLocaleString()}
-                </TableCell>
-                <TableCell className="font-medium whitespace-nowrap">{item.provider}</TableCell>
-                <TableCell className="font-mono text-slate-600">
-                  <div>{item.model}</div>
-                  <div className="text-xs text-slate-400 mt-1">
-                    {(item.runCount || 1)} runs | {(item.successRate ?? 100)}% | {item.tokenSource || 'unknown'}
-                  </div>
-                </TableCell>
-                <TableCell className="text-right whitespace-nowrap">
-                  {(item.ttft || item.latency)} ms
-                </TableCell>
-                <TableCell className="text-right whitespace-nowrap">{item.latency} ms</TableCell>
-                <TableCell className="text-right whitespace-nowrap">{item.throughput || 0}</TableCell>
-                <TableCell className="text-right whitespace-nowrap">{item.effectiveTps || 0}</TableCell>
-                <TableCell className="text-right whitespace-nowrap">{item.outputTokens}</TableCell>
-                <TableCell className="text-center">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => onDelete(item.id)}
-                    className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                    title={language === 'zh' ? '删除' : 'Delete'}
-                  >
-                    <Trash2 size={16} />
-                  </Button>
-                </TableCell>
+        <>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t('history.columns.time', language)}</TableHead>
+                <TableHead>{t('history.columns.provider', language)}</TableHead>
+                <TableHead className="min-w-[120px]">{t('history.columns.model', language)}</TableHead>
+                <TableHead className="text-right whitespace-nowrap">{t('history.columns.ttft', language)}</TableHead>
+                <TableHead className="text-right whitespace-nowrap">{t('history.columns.latency', language)}</TableHead>
+                <TableHead className="text-right whitespace-nowrap">{t('history.columns.steadyTps', language)}</TableHead>
+                <TableHead className="text-right whitespace-nowrap">{t('history.columns.effectiveTps', language)}</TableHead>
+                <TableHead className="text-right whitespace-nowrap">{t('history.columns.tokens', language)}</TableHead>
+                <TableHead className="text-center">{t('history.columns.action', language)}</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {showing.map((item) => (
+                <TableRow key={item.id}>
+                  <TableCell className="text-slate-600 whitespace-nowrap">
+                    {new Date(item.timestamp).toLocaleString()}
+                  </TableCell>
+                  <TableCell className="font-medium whitespace-nowrap">{item.provider}</TableCell>
+                  <TableCell className="font-mono text-slate-600">
+                    <div>{item.model}</div>
+                    <div className="text-xs text-slate-400 mt-1">
+                      {(item.runCount || 1)} runs | {(item.successRate ?? 100)}% | {item.tokenSource || 'unknown'}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right whitespace-nowrap">
+                    {(item.ttft || item.latency)} ms
+                  </TableCell>
+                  <TableCell className="text-right whitespace-nowrap">{item.latency} ms</TableCell>
+                  <TableCell className="text-right whitespace-nowrap">{item.throughput || 0}</TableCell>
+                  <TableCell className="text-right whitespace-nowrap">{item.effectiveTps || 0}</TableCell>
+                  <TableCell className="text-right whitespace-nowrap">{item.outputTokens}</TableCell>
+                  <TableCell className="text-center">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onDelete(item.id)}
+                      className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                      title={language === 'zh' ? '删除' : 'Delete'}
+                    >
+                      <Trash2 size={16} />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+
+          <div className="flex items-center justify-between mt-4 text-sm text-slate-500">
+            <span>
+              {t('history.showing', language)
+                .replace('{shown}', String(showing.length))
+                .replace('{total}', String(history.length))}
+            </span>
+            {hasMore && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}
+              >
+                <ChevronDown size={16} />
+                {t('history.loadMore', language)}
+              </Button>
+            )}
+          </div>
+        </>
       )}
     </div>
   )
