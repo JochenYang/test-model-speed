@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import {
+  Brush,
   CartesianGrid,
   Legend,
   Line,
@@ -95,7 +96,7 @@ export default function HistoryChart({ history, language = 'zh' }) {
           {empty ? t('chart.empty', language) : t('chart.tooFew', language)}
         </div>
       ) : (
-        <div style={{ width: '100%', height: 320 }}>
+        <div style={{ width: '100%', height: 360 }}>
           <ResponsiveContainer>
             <LineChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -112,6 +113,7 @@ export default function HistoryChart({ history, language = 'zh' }) {
               <Tooltip
                 labelFormatter={formatTooltipTime}
                 contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: 6 }}
+                cursor={{ stroke: '#94a3b8', strokeDasharray: '3 3' }}
               />
               <Legend />
               {series.map((s, i) => (
@@ -121,11 +123,19 @@ export default function HistoryChart({ history, language = 'zh' }) {
                   dataKey={s}
                   stroke={colorFor(i)}
                   strokeWidth={2}
-                  dot={{ r: 3 }}
-                  activeDot={{ r: 5 }}
+                  dot={{ r: 4, strokeWidth: 2, fill: '#fff' }}
+                  activeDot={{ r: 7, strokeWidth: 2 }}
                   connectNulls
                 />
               ))}
+              <Brush
+                dataKey="timestamp"
+                height={28}
+                stroke="#94a3b8"
+                fill="#f1f5f9"
+                travellerWidth={10}
+                tickFormatter={formatTickTime}
+              />
             </LineChart>
           </ResponsiveContainer>
         </div>
